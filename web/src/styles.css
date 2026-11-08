@@ -867,6 +867,89 @@ input[type="range"]::-moz-range-thumb {
   font-variant-numeric: tabular-nums;
 }
 
+/* Presets side by side as picture buttons, with the chosen one's note underneath. */
+.preset-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 16px;
+}
+
+.preset-tiles {
+  display: grid;
+  gap: 8px;
+}
+
+button.preset-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 4px 8px;
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+@media (hover: hover) {
+  button.preset-tile:hover {
+    color: var(--text);
+    border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  }
+}
+
+button.preset-tile.selected {
+  color: var(--text);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+}
+
+.preset-icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.preset-tile.selected .preset-icon {
+  color: var(--accent);
+}
+
+.preset-icon-dish {
+  fill: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.preset-tile-label {
+  max-width: 100%;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.preset-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-left: 3px solid var(--accent);
+  background: var(--surface-2);
+}
+
+.preset-note-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.guide .preset-note .preset-note-text {
+  margin: 0;
+}
+
 /* ------------------------------------------------------------------- toast */
 
 .toast {
@@ -1288,4 +1371,33 @@ input[type="range"]::-moz-range-thumb {
 .desktop .preset-values {
   font-family: var(--mono);
   font-size: 0.6875rem;
+}
+
+.desktop .preset-gallery {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.desktop .preset-tiles {
+  gap: 6px;
+}
+
+.desktop button.preset-tile {
+  gap: 4px;
+  padding: 8px 2px 6px;
+  border-radius: 6px;
+}
+
+.desktop .preset-icon {
+  width: 38px;
+  height: 38px;
+}
+
+.desktop .preset-tile-label {
+  font-size: 0.71875rem;
+}
+
+.desktop .preset-note {
+  padding: 8px 10px;
+  border-radius: 6px;
 }

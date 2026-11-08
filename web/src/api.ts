@@ -100,6 +100,8 @@ export type ParameterValues = Record<string, ParameterValue>;
 export interface Preset {
   label: string;
   description: string;
+  /** Name of the picture to draw for this preset; see PresetIcon. */
+  icon: string | null;
   values: ParameterValues;
 }
 

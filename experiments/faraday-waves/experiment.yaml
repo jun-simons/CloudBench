@@ -67,18 +67,23 @@ live:
   stop: stop
 
 # Placeholder values: replace with settings found to look good on the real dish.
+# `icon` picks the picture drawn on the preset's button (see PresetIcon in the web app).
 presets:
   gentle:
     label: "Gentle waves"
+    icon: ripples
     values: {frequency_hz: 25, amplitude: 0.25, shape: sine}
   squares:
     label: "Square lattice"
+    icon: square-lattice
     values: {frequency_hz: 40, amplitude: 0.45, shape: sine}
   fine:
     label: "Fine lattice"
+    icon: fine-lattice
     values: {frequency_hz: 80, amplitude: 0.6, shape: sine}
   chaos:
     label: "Chaotic waves"
+    icon: chaos
     values: {frequency_hz: 50, amplitude: 0.7, shape: square}
 
 # A timed run, for the API and AI agents: plays the chosen tone for duration_s.

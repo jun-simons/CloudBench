@@ -87,6 +87,9 @@ class Preset(_Strict):
 
     label: str
     description: str = ""
+    # Name of a picture the web app draws for this preset (e.g. "square-lattice"); see
+    # PresetIcon in web/src/panes.tsx. Unknown names get a generic picture.
+    icon: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,40}$")
     values: dict[str, Any]
 
 

@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type {
@@ -585,6 +585,205 @@ function PresetButton({
 
 const PRESET_PREFIX = "preset:";
 
+/** A tiny stand-in for one point of the dish's surface pattern, for PresetIcon. */
+function Dots({ spacing, r, offset = 0 }: { spacing: number; r: number; offset?: number }) {
+  const points: number[] = [];
+  for (let v = 4 + offset; v <= 44; v += spacing) points.push(v);
+  return (
+    <>
+      {points.flatMap((x) =>
+        points.map((y) => <circle key={`${x},${y}`} cx={x} cy={y} r={r} fill="currentColor" />),
+      )}
+    </>
+  );
+}
+
+// Irregular blobs for the chaotic regime: [x, y, r], fixed so the picture does not change.
+const CHAOS = [
+  [12, 14, 3.2],
+  [22, 9, 1.8],
+  [31, 13, 2.6],
+  [39, 20, 1.6],
+  [17, 22, 1.5],
+  [27, 21, 3.4],
+  [9, 29, 2.2],
+  [20, 31, 2.8],
+  [33, 29, 1.9],
+  [40, 33, 2.7],
+  [14, 39, 1.7],
+  [25, 40, 2.4],
+  [33, 40, 1.4],
+  [6, 20, 1.3],
+  [28, 31, 1.2],
+  [21, 16, 1.1],
+] as const;
+
+/**
+ * A preset's picture: the dish seen from above with the pattern to look for. The
+ * experiment names the picture with `icon`; these drawings are placeholders until
+ * ones that match the real patterns replace them.
+ */
+export function PresetIcon({ name }: { name: string | null }) {
+  const clip = `dish-${useId().replace(/:/g, "")}`;
+  let pattern: ReactNode;
+  switch (name) {
+    case "ripples":
+      pattern = [5, 10, 15, 20].map((r, i) => (
+        <circle
+          key={r}
+          cx="24"
+          cy="24"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          opacity={1 - i * 0.2}
+        />
+      ));
+      break;
+    case "square-lattice":
+      pattern = <Dots spacing={8} r={2.4} />;
+      break;
+    case "fine-lattice":
+      pattern = <Dots spacing={4.5} r={1.15} offset={-1} />;
+      break;
+    case "chaos":
+      pattern = CHAOS.map(([x, y, r]) => (
+        <circle key={`${x},${y}`} cx={x} cy={y} r={r} fill="currentColor" />
+      ));
+      break;
+    default:
+      pattern = (
+        <path
+          d="M4 24c5-9 9-9 14 0s9 9 14 0 9-9 14 0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      );
+  }
+  return (
+    <svg className="preset-icon" viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
+      <defs>
+        <clipPath id={clip}>
+          <circle cx="24" cy="24" r="20" />
+        </clipPath>
+      </defs>
+      <circle className="preset-icon-dish" cx="24" cy="24" r="20" />
+      <g clipPath={`url(#${clip})`}>{pattern}</g>
+      <circle
+        cx="24"
+        cy="24"
+        r="20.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        opacity="0.45"
+      />
+    </svg>
+  );
+}
+
+/** The parts of the Markdown tree (hast) the preset gallery reads. */
+interface HastNode {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+}
+
+function textOf(node: HastNode): string {
+  return node.type === "text" ? (node.value ?? "") : (node.children ?? []).map(textOf).join("");
+}
+
+interface PresetItem {
+  id: string;
+  preset: Preset;
+  label: string;
+  /** The text after the preset link: what to look for. */
+  note: string;
+}
+
+/** A Markdown list in which every item starts with a preset link, or null. */
+function presetList(list: HastNode, experiment: Experiment): PresetItem[] | null {
+  const items = (list.children ?? []).filter((c) => c.type === "element" && c.tagName === "li");
+  if (items.length === 0) return null;
+  const out: PresetItem[] = [];
+  for (const li of items) {
+    let parts = (li.children ?? []).filter((c) => c.type !== "text" || c.value?.trim());
+    // Loose lists wrap each item's content in a paragraph.
+    const [only] = parts;
+    if (parts.length === 1 && only?.tagName === "p") parts = only.children ?? [];
+    const [link, ...rest] = parts;
+    if (link?.tagName !== "a") return null;
+    const href = String(link.properties?.href ?? "");
+    const id = href.startsWith(PRESET_PREFIX) ? href.slice(PRESET_PREFIX.length) : null;
+    const preset = id ? experiment.presets[id] : undefined;
+    if (!id || !preset) return null;
+    out.push({
+      id,
+      preset,
+      label: textOf(link).trim() || preset.label,
+      note: rest.map(textOf).join("").trim(),
+    });
+  }
+  return out;
+}
+
+/**
+ * Presets side by side as picture buttons. Applying one shows its settings and what
+ * to look for underneath.
+ */
+function PresetGallery({
+  experiment,
+  items,
+  control,
+}: {
+  experiment: Experiment;
+  items: PresetItem[];
+  control: LiveControlState;
+}) {
+  const noteId = useId();
+  const selected = items.find((item) => matchesPreset(control.values, item.preset)) ?? null;
+  return (
+    <div className="preset-gallery">
+      <div
+        className="preset-tiles"
+        style={{ gridTemplateColumns: `repeat(${Math.min(items.length, 4)}, minmax(0, 1fr))` }}
+      >
+        {items.map((item) => {
+          const isSelected = item === selected;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={`preset-tile ${isSelected ? "selected" : ""}`}
+              aria-pressed={isSelected}
+              aria-describedby={isSelected ? noteId : undefined}
+              title={presetSummary(experiment, item.preset)}
+              onClick={() => control.applyPreset(item.preset)}
+            >
+              <PresetIcon name={item.preset.icon} />
+              <span className="preset-tile-label">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {selected && (
+        <div className="preset-note" id={noteId}>
+          <div className="preset-note-head">
+            <strong>{selected.label}</strong>
+            <span className="preset-values">{presetSummary(experiment, selected.preset)}</span>
+          </div>
+          {selected.note && <p className="preset-note-text">{selected.note}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GuidePane({
   experiment,
   control,
@@ -593,6 +792,11 @@ export function GuidePane({
   control: LiveControlState;
 }) {
   const components: Components = {
+    ul({ node, children, ...props }) {
+      const items = node ? presetList(node as unknown as HastNode, experiment) : null;
+      if (items) return <PresetGallery experiment={experiment} items={items} control={control} />;
+      return <ul {...props}>{children}</ul>;
+    },
     a({ href, children }) {
       if (href?.startsWith(PRESET_PREFIX)) {
         const preset = experiment.presets[href.slice(PRESET_PREFIX.length)];
