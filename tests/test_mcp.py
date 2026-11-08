@@ -88,3 +88,45 @@ async def test_mcp_requires_a_session(lab: Lab) -> None:
         result = await client.call_tool("list_workbenches", {})
         assert result.is_error
         assert "authentication_required" in _text(result)
+
+
+async def test_agent_without_headers_signs_in_with_start_session(lab: Lab) -> None:
+    """Most MCP clients cannot set headers: the agent gets a token from a tool instead."""
+    async with Client(f"{lab.url}/mcp") as client:
+        # The error says exactly what to do next.
+        denied = await client.call_tool("list_workbenches", {})
+        assert denied.is_error
+        assert "start_session" in _text(denied) and "session_token" in _text(denied)
+
+        session = _data(await client.call_tool("start_session", {"display_name": "Claude"}))
+        token = session["token"]
+        assert token.startswith("cbt_") and session["display_name"] == "Claude"
+
+        [bench] = _data(await client.call_tool("list_workbenches", {"session_token": token}))
+        assert bench["id"] == WORKBENCH
+        args = {"workbench_id": WORKBENCH, "session_token": token}
+        lease = _data(await client.call_tool("request_lease", args))
+        assert lease["state"] == "active"
+        assert lease["holder"] == "Claude"
+        released = _data(
+            await client.call_tool(
+                "release_lease", {"lease_id": lease["id"], "session_token": token}
+            )
+        )
+        assert released["state"] == "released"
+
+        bad = await client.call_tool("list_workbenches", {"session_token": "cbt_nope"})
+        assert bad.is_error
+        assert "invalid_token" in _text(bad) and "start_session" in _text(bad)
+
+        empty = await client.call_tool("start_session", {"display_name": ""})
+        assert empty.is_error
+
+
+async def test_mcp_instructions_explain_signing_in(lab: Lab) -> None:
+    async with Client(f"{lab.url}/mcp") as client:
+        tools = {t.name: t for t in (await client.list_tools()).tools}
+        assert "start_session" in tools
+        schema = tools["list_workbenches"].input_schema
+        assert "start_session" in schema["properties"]["session_token"]["description"]
+        assert "session_token" not in schema.get("required", [])

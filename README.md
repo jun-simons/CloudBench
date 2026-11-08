@@ -78,7 +78,8 @@ tool, viewable like `video` (for example `get_camera_frame` with `stream: "point
 ## AI agents (MCP)
 
 The gateway serves an MCP endpoint over Streamable HTTP at `/mcp`.
-Get a token from `POST /v1/sessions` and configure your MCP client with the header `Authorization: Bearer <token>`, for example:
+No setup is needed beyond the URL: an agent signs in by calling the `start_session` tool and passes the token it returns as `session_token` to every other tool.
+If your MCP client can send headers, you can instead get a token from `POST /v1/sessions` and configure the header `Authorization: Bearer <token>`, for example:
 
 ```bash
 TOKEN=$(curl -s -X POST localhost:8000/v1/sessions -H 'content-type: application/json' \
