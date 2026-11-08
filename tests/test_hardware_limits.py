@@ -9,7 +9,7 @@ import wave
 import numpy as np
 import pytest
 
-from cloudbench.agent.audio import Audio
+from cloudbench.agent.audio import Audio, SoundDeviceOutput
 from cloudbench.agent.camera import pick_avfoundation_device
 from cloudbench.agent.config import VibratorConfig
 from cloudbench.agent.tools import ActionError, VibratorTool
@@ -22,6 +22,9 @@ class RecordingOutput:
     async def play(self, audio: Audio, cancel: asyncio.Event) -> float:
         self.played.append(audio)
         return audio.duration_s
+
+    async def play_tone(self, synth: object, done: asyncio.Event, max_duration_s: float) -> float:
+        return 0.0
 
     def stop(self) -> None:
         pass
@@ -77,3 +80,78 @@ def test_camera_selected_by_index_and_missing_name() -> None:
     assert pick_avfoundation_device(3, DEVICES) == "3"
     with pytest.raises(RuntimeError):
         pick_avfoundation_device("webcam", DEVICES)
+
+
+class FakeSD:
+    """Stands in for the sounddevice module so the real output driver can be tested."""
+
+    def __init__(self) -> None:
+        self.played: np.ndarray | None = None
+        self.callback = None
+
+    def query_devices(self, device, kind=None):
+        return {"max_output_channels": 2}
+
+    def play(self, samples, rate, device=None):
+        self.played = samples
+
+    def get_stream(self):
+        return type("S", (), {"active": False})()
+
+    def stop(self):
+        pass
+
+    def OutputStream(self, **kw):
+        self.channels = kw["channels"]
+        self.callback = kw["callback"]
+        return type(
+            "St",
+            (),
+            {
+                "start": lambda s: None,
+                "stop": lambda s: None,
+                "close": lambda s: None,
+                "abort": lambda s: None,
+            },
+        )()
+
+
+class LoudSynth:
+    sample_rate = 48_000
+    finished = True
+
+    def render(self, frames: int) -> np.ndarray:
+        return np.ones(frames, np.float32)  # full scale, as if every limit upstream failed
+
+    def release(self) -> None:
+        pass
+
+
+def make_output(
+    monkeypatch: pytest.MonkeyPatch, max_gain: float
+) -> tuple[SoundDeviceOutput, FakeSD]:
+    import sys
+
+    fake = FakeSD()
+    monkeypatch.setitem(sys.modules, "sounddevice", fake)
+    return SoundDeviceOutput("External Headphones", max_gain), fake
+
+
+async def test_driver_clips_clips_and_drives_both_channels(monkeypatch: pytest.MonkeyPatch) -> None:
+    output, fake = make_output(monkeypatch, 0.25)
+    loud = Audio(np.ones(480, np.float32), 48_000)
+    await output.play(loud, asyncio.Event())
+    assert fake.played is not None and fake.played.shape == (480, 2)
+    assert np.max(np.abs(fake.played)) == pytest.approx(0.25)
+
+
+async def test_driver_clips_live_tone(monkeypatch: pytest.MonkeyPatch) -> None:
+    output, fake = make_output(monkeypatch, 0.25)
+    done = asyncio.Event()
+    done.set()
+    await output.play_tone(LoudSynth(), done, 1.0)  # type: ignore[arg-type]
+    assert fake.channels == 2
+    buf = np.zeros((256, 2), np.float32)
+    assert fake.callback is not None
+    fake.callback(buf, 256, None, None)
+    assert np.max(np.abs(buf)) == pytest.approx(0.25)

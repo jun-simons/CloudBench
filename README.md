@@ -54,6 +54,27 @@ uv run python -m sounddevice   # list audio outputs
 CLOUDBENCH_AGENT_SECRET=... uv run cloudbench-agent --config agent.local.yaml
 ```
 
+### Image analysis on the camera
+
+The agent can measure the wave pattern in the latest camera frame (ported from the CameraTest toolkit). These are
+actions on the `camera` tool; they only read the frame, so they can run while the vibrator is playing.
+They find the dish by its red colour, so the dish must be visible. The camera and dish must not move between
+`capture_reference` and `activity`.
+
+| action | returns |
+|---|---|
+| `detect_points` | crests (or specular `highlights`): count, density per cm², positions in mm from the dish centre |
+| `fourier` | wavelength, k, spectral peaks, and the angular harmonics of the spectral ring (m=4 square, m=6 hexagonal) |
+| `delaunay` | triangulation of the points: neighbours per point, bond lengths, bond-orientational order `psi4`/`psi6` |
+| `analyze` | dish geometry plus the three above in one call |
+| `capture_reference`, `activity` | wave activity against a still reference (about 0.6 is noise, 10+ is strong waves) |
+
+Notes: a perfect square lattice triangulates with one diagonal per cell, so its coordination reads about 6; judge square
+versus hexagonal by `psi4` against `psi6` and by the `fourier` symmetry harmonics. Millimetres assume `vision.cup_diameter_mm`.
+
+Set `vision.stream_fps` (default 0, off) to also publish annotated streams `points`, `delaunay` and `spectrum` on the camera
+tool, viewable like `video` (for example `get_camera_frame` with `stream: "points"`). Set `vision.enabled: false` to remove all of this.
+
 ## AI agents (MCP)
 
 The gateway serves an MCP endpoint over Streamable HTTP at `/mcp`.

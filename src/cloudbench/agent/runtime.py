@@ -18,7 +18,7 @@ from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidStatus
 
 from cloudbench import __version__
-from cloudbench.agent.camera import Camera
+from cloudbench.agent.camera import FrameStream
 from cloudbench.agent.tools import ActionError, FileFetcher, Tool
 from cloudbench.protocol import (
     AGENT_CONTROL_PATH,
@@ -59,7 +59,7 @@ class Agent:
         workbench: WorkbenchDescriptor,
         secret: str,
         tools: list[Tool],
-        cameras: dict[tuple[str, str], Camera] | None = None,
+        cameras: dict[tuple[str, str], FrameStream] | None = None,
     ) -> None:
         self._http_url = gateway_url.rstrip("/")
         self._ws_url = self._http_url.replace("https://", "wss://", 1).replace(
@@ -242,7 +242,7 @@ class Agent:
 
     # ---------------------------------------------------------------- video
 
-    async def _stream_loop(self, tool: str, stream: str, camera: Camera) -> None:
+    async def _stream_loop(self, tool: str, stream: str, camera: FrameStream) -> None:
         camera.start()
         url = self._ws_url + AGENT_STREAM_PATH.format(tool=tool, stream=stream)
         backoff = 1.0

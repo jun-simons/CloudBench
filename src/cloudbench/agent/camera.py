@@ -12,6 +12,7 @@ import threading
 import time
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
+from typing import Protocol
 
 import cv2
 import numpy as np
@@ -22,6 +23,16 @@ from cloudbench.agent.config import CameraConfig
 log = logging.getLogger(__name__)
 
 FrameSource = Callable[[], np.ndarray | None]
+
+
+class FrameStream(Protocol):
+    """What the agent needs to push a video stream: ``Camera`` and the derived overlay streams."""
+
+    fault: str | None
+
+    def start(self) -> None: ...
+    def close(self) -> None: ...
+    def frames(self) -> AsyncIterator[bytes]: ...
 
 
 class Camera:
@@ -83,6 +94,11 @@ class Camera:
                 closer = getattr(read, "close", None)
                 if closer is not None:
                     closer()
+
+    def latest(self) -> tuple[int, bytes | None]:
+        """(sequence number, JPEG) of the newest frame, without waiting."""
+        with self._cond:
+            return self._seq, self._latest
 
     def _wait_frame(self, after: int, timeout: float) -> tuple[int, bytes | None]:
         with self._cond:

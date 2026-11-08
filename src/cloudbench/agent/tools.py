@@ -14,12 +14,14 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
+import cv2
 import numpy as np
 
 from cloudbench.agent.audio import Audio, AudioOutput, WavError, decode_wav
-from cloudbench.agent.camera import Camera
-from cloudbench.agent.config import CameraConfig, VibratorConfig
+from cloudbench.agent.camera import Camera, FrameStream
+from cloudbench.agent.config import CameraConfig, VibratorConfig, VisionConfig
 from cloudbench.agent.synth import ToneParams, ToneSynth
+from cloudbench.agent.vision import CANON, Analyzer, OverlayStream, PointKind, View, VisionError
 from cloudbench.protocol import (
     FILE_ID_FORMAT,
     ActionDescriptor,
@@ -60,6 +62,7 @@ class Tool(ABC):
 
 
 _SHAPES = [shape.value for shape in Shape]
+_VIEWS: tuple[View, ...] = ("points", "delaunay", "spectrum")
 
 
 class VibratorTool(Tool):
@@ -346,24 +349,161 @@ def _params_out(params: ToneParams) -> dict[str, Any]:
     }
 
 
+_POINT_KINDS = ["crests", "highlights"]
+_KIND_PROPERTY = {
+    "kind": {
+        "type": "string",
+        "enum": _POINT_KINDS,
+        "default": "crests",
+        "description": "crests: one point per wave crest (needs a wave pattern); "
+        "highlights: bright specular glints",
+    }
+}
+
+
+def _vision_actions() -> list[ActionDescriptor]:
+    """Image analysis of the latest camera frame. Quick and read-only, so they may run while the
+    vibrator is playing. All of them need the red dish to be visible."""
+
+    def action(
+        name: str, title: str, description: str, properties: dict[str, Any]
+    ) -> ActionDescriptor:
+        return ActionDescriptor(
+            name=name,
+            title=title,
+            description=description,
+            input_schema={
+                "type": "object",
+                "additionalProperties": False,
+                "properties": properties,
+            },
+            concurrent=True,
+        )
+
+    return [
+        action(
+            "detect_points",
+            "Detect points",
+            "Find crests or specular highlights in the dish. Returns count, density_per_cm2 and "
+            "points_mm as [x, y] in mm from the dish centre.",
+            {
+                **_KIND_PROPERTY,
+                "max_points": {"type": "integer", "minimum": 1, "maximum": 2000, "default": 300},
+            },
+        ),
+        action(
+            "fourier",
+            "Fourier analysis",
+            "2D FFT of the dish pattern. Returns wavelength_mm, k_rad_per_m, contrast, "
+            "ring_strength (compare with a still frame), spectral peaks (wavelength_mm, angle_deg, "
+            "relative_power) and "
+            "symmetry: angular harmonics m=2..12 of the spectral ring (large m=4: square, "
+            "m=6: hexagonal, all small: labyrinth or disorder).",
+            {"peaks": {"type": "integer", "minimum": 1, "maximum": 12, "default": 6}},
+        ),
+        action(
+            "delaunay",
+            "Delaunay lattice analysis",
+            "Triangulate the detected points. Returns coordination_histogram (neighbours per "
+            "interior point), bond_length_mm, nearest_neighbour_mm and the bond-orientational "
+            "order "
+            "psi4 (square) and psi6 (hexagonal), global and per-point (_local).",
+            _KIND_PROPERTY,
+        ),
+        action(
+            "analyze",
+            "Analyze pattern",
+            "One call with the dish geometry, fourier summary, crest count and delaunay statistics "
+            "(plus activity if a reference was captured).",
+            {},
+        ),
+        action(
+            "capture_reference",
+            "Capture still reference",
+            "Remember the current frame as the still surface. Call it with the vibrator off; "
+            "activity is measured against it.",
+            {},
+        ),
+        action(
+            "activity",
+            "Measure activity",
+            "Wave activity: std-dev of the band-passed dish image minus the reference (about 0.6 "
+            "is noise, 10 or more is strong waves). Needs capture_reference first, and an "
+            "unmoved camera.",
+            {},
+        ),
+    ]
+
+
 class CameraTool(Tool):
-    def __init__(self, config: CameraConfig, camera: Camera) -> None:
+    def __init__(
+        self, config: CameraConfig, camera: Camera, vision: VisionConfig | None = None
+    ) -> None:
         self.camera = camera
+        self._config = config
+        self._vision = vision if vision is not None and vision.enabled else None
+        self._analyzer = Analyzer(self._vision.cup_diameter_mm) if self._vision else None
+        streams = [
+            StreamDescriptor(
+                name="video",
+                access=StreamAccess.PUBLIC,
+                width=config.width,
+                height=config.height,
+                fps=config.fps,
+            )
+        ]
+        description = "View the live camera stream of the faraday dish."
+        if self._vision is not None:
+            description += (
+                " Analysis actions measure the pattern in the latest frame (wavelength, "
+                "crests, lattice order, activity)."
+            )
+            if self._vision.stream_fps > 0:
+                description += (
+                    " The points, delaunay and spectrum streams show what the analysis sees."
+                )
+                streams += [
+                    StreamDescriptor(
+                        name=view,
+                        access=StreamAccess.PUBLIC,
+                        width=CANON,
+                        height=CANON,
+                        fps=self._vision.stream_fps,
+                    )
+                    for view in _VIEWS
+                ]
         self.descriptor = ToolDescriptor(
             name="camera",
             type="camera",
             title="Camera",
-            description="View the live camera stream of the faraday dish.",
-            streams=[
-                StreamDescriptor(
-                    name="video",
-                    access=StreamAccess.PUBLIC,
-                    width=config.width,
-                    height=config.height,
-                    fps=config.fps,
-                )
-            ],
+            description=description,
+            actions=_vision_actions() if self._vision is not None else [],
+            streams=streams,
         )
+
+    def overlay_streams(self) -> dict[tuple[str, str], FrameStream]:
+        """The derived streams to push to the gateway (empty unless vision streams are enabled)."""
+        if self._vision is None or self._analyzer is None or self._vision.stream_fps <= 0:
+            return {}
+        return {
+            ("camera", view): OverlayStream(
+                self.camera,
+                self._analyzer,
+                view,
+                self._vision.stream_fps,
+                self._config.jpeg_quality,
+            )
+            for view in _VIEWS
+        }
+
+    def _latest_frame(self) -> np.ndarray:
+        _, jpeg = self.camera.latest()
+        frame = (
+            None if jpeg is None else cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
+        )
+        if frame is None:
+            raise ActionError("no_frame", "No camera frame is available yet")
+        return frame
 
     async def invoke(
         self,
@@ -372,7 +512,25 @@ class CameraTool(Tool):
         fetch_file: FileFetcher,
         cancel: asyncio.Event,
     ) -> dict[str, Any]:
-        raise ActionError("unknown_action", "The camera has no actions")
+        analyzer = self._analyzer
+        if analyzer is None or self.descriptor.action(action) is None:
+            raise ActionError("unknown_action", f"The camera has no action {action!r}")
+        frame = self._latest_frame()
+        kind: PointKind = "highlights" if input.get("kind") == "highlights" else "crests"
+        calls: dict[str, Callable[[], dict[str, Any]]] = {
+            "detect_points": lambda: analyzer.points(
+                frame, kind, int(input.get("max_points", 300))
+            ),
+            "fourier": lambda: analyzer.fourier(frame, int(input.get("peaks", 6))),
+            "delaunay": lambda: analyzer.delaunay(frame, kind),
+            "analyze": lambda: analyzer.analyze(frame),
+            "capture_reference": lambda: analyzer.capture_reference(frame),
+            "activity": lambda: analyzer.activity(frame),
+        }
+        try:
+            return await asyncio.to_thread(calls[action])
+        except VisionError as exc:
+            raise ActionError(exc.code, exc.message) from exc
 
     def reset(self) -> None:
         pass
