@@ -108,6 +108,9 @@ class ExperimentDefinition(_Strict):
     apiVersion: Literal["cloudbench/v1"]
     kind: Literal["Experiment"]
     id: str = Field(pattern=r"^exp_[a-z0-9_]{1,60}$")
+    # The experiment's address in the web app: /experiments/<slug>. Defaults to the id
+    # without "exp_", with dashes: exp_faraday_waves -> faraday-waves.
+    slug: str = Field(default="", pattern=r"^$|^[a-z0-9][a-z0-9-]{0,60}$")
     version: int = Field(ge=1)
     title: str
     summary: str = ""
@@ -129,6 +132,12 @@ class ExperimentDefinition(_Strict):
             "properties": self.parameters,
             "additionalProperties": False,
         }
+
+    @model_validator(mode="after")
+    def _default_slug(self) -> ExperimentDefinition:
+        if not self.slug:
+            self.slug = self.id.removeprefix("exp_").replace("_", "-")
+        return self
 
     @model_validator(mode="after")
     def _check_references(self) -> ExperimentDefinition:
@@ -304,6 +313,9 @@ class ExperimentService:
                 if folder not in asset_path.parents:
                     raise ValueError(f"asset {name!r} points outside the experiment folder")
                 files[name] = await self._lab_file(asset_path)
+        for other in self._definitions.values():
+            if other.slug == definition.slug and other.id != definition.id:
+                raise ValueError(f"slug {definition.slug!r} is already used by {other.id}")
         self._definitions[definition.id] = definition
         self._asset_files[definition.id] = files
         log.info("Loaded experiment %s v%d", definition.id, definition.version)

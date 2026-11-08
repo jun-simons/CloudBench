@@ -118,6 +118,8 @@ export type Step = { show: string } | { run: string; input: Record<string, unkno
 
 export interface Experiment {
   id: string;
+  /** Its address in the app: /experiments/<slug>. */
+  slug: string;
   version: number;
   title: string;
   summary: string;

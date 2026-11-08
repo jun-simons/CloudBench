@@ -4,15 +4,16 @@ import { copy } from "./copy";
 import {
   CameraCard,
   GuidePane,
-  LeasePanel,
+  LeaseControl,
   StreamGrid,
   VibratorCard,
   type StreamSource,
 } from "./panes";
-import { Logo, ThemeToggle, Welcome } from "./ui";
+import { ExperimentMenu, Logo, ThemeToggle, Welcome } from "./ui";
 import { useMediaQuery, useTheme } from "./useDisplay";
 import { useLab, type LabState } from "./useLab";
 import { useLiveControl } from "./useLiveControl";
+import { experimentPath, useRoute } from "./useRoute";
 
 export default function App() {
   const [session, setSession] = useState(api.session);
@@ -33,8 +34,9 @@ export default function App() {
 }
 
 function Lab({ name }: { name: string }) {
-  const lab = useLab();
-  const { experiment, workbench, lease } = lab;
+  const { slug, navigate } = useRoute();
+  const lab = useLab(slug);
+  const { experiments, experiment, workbench, lease } = lab;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const control = useLiveControl(lab, setError);
@@ -43,6 +45,16 @@ function Lab({ name }: { name: string }) {
   const desktop = useMediaQuery("(min-width: 960px)");
   const wide = useMediaQuery("(min-width: 1280px)");
   const [theme, toggleTheme] = useTheme();
+
+  // "/" and unknown addresses go to the first experiment; there is no list page yet.
+  const first = experiments[0];
+  useEffect(() => {
+    if (first && !experiment) navigate(experimentPath(first.slug), { replace: true });
+  }, [first, experiment, navigate]);
+
+  useEffect(() => {
+    document.title = experiment ? `${experiment.title} · ${copy.appName}` : copy.appName;
+  }, [experiment]);
 
   const act = useCallback(async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -77,8 +89,15 @@ function Lab({ name }: { name: string }) {
       />
     </div>
   );
-  const leasePanel = (
-    <LeasePanel
+  const menu = (
+    <ExperimentMenu
+      experiments={experiments}
+      current={experiment}
+      onSelect={(e) => navigate(experimentPath(e.slug))}
+    />
+  );
+  const leaseControl = (
+    <LeaseControl
       workbench={workbench}
       lease={lease}
       onJoin={join}
@@ -111,17 +130,15 @@ function Lab({ name }: { name: string }) {
       <div className="app desktop">
         <header className="topbar">
           <Logo />
-          {experiment && (
-            <div className="topbar-title">
-              <h1>{experiment.title}</h1>
-              {experiment.summary && <span className="muted">{experiment.summary}</span>}
-            </div>
-          )}
+          <div className="topbar-title">
+            <h1>{menu}</h1>
+            {experiment?.summary && <span className="muted">{experiment.summary}</span>}
+          </div>
+          {leaseControl}
           {user}
         </header>
         <main className={`workspace ${wide ? "wide" : ""}`}>
           <aside className="column column-side">
-            {leasePanel}
             {vibrator}
             {!wide && guide}
           </aside>
@@ -146,13 +163,13 @@ function Lab({ name }: { name: string }) {
       <main className="layout">
         {experiment && (
           <div className="page-title heading">
-            <h1>{experiment.title}</h1>
+            <h1>{menu}</h1>
             {experiment.summary && <p className="muted">{experiment.summary}</p>}
           </div>
         )}
 
         <div className="pane pane-controls">
-          {leasePanel}
+          {leaseControl}
           <CameraCard source={primary} workbench={workbench} />
           {vibrator}
           {/* Extra outputs (e.g. computer vision overlays) come after the controls, collapsed,

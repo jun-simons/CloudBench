@@ -6,6 +6,8 @@
 apiVersion: cloudbench/v1
 kind: Experiment
 id: exp_faraday_waves
+# Web address: cloudbench.work/experiments/faraday-wave
+slug: faraday-wave
 version: 2
 title: "Faraday Waves Experiment"
 summary: "Create standing Faraday waves and observe different lattice patterns."

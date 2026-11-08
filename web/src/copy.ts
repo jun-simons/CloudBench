@@ -7,6 +7,12 @@
 export const copy = {
   appName: "CloudBench",
 
+  experiments: {
+    /** Heading of the experiment menu. */
+    menu: "Experiments",
+    choose: "Choose an experiment",
+  },
+
   theme: {
     toLight: "Switch to light theme",
     toDark: "Switch to dark theme",
@@ -39,40 +45,38 @@ export const copy = {
   },
 
   bench: {
-    offline: "TODO:text - the workbench is offline right now",
-    maintenance: "TODO:text - the workbench is under maintenance",
+    offline: "This workbench is offline right now",
+    maintenance: "This workbench is under maintenance",
   },
 
   lease: {
-    idleHeading: "TODO:text - call to action to take control of the bench",
+    /** Accessible name of the bench control (join, leave, take control, release). */
+    label: "Bench session",
     joinQueue: "Join queue",
-    benchFree: "TODO:text - the bench is free, start right away",
     waiting: (n: number) =>
       n === 0 ? "Nobody waiting" : n === 1 ? "1 person waiting" : `${n} people waiting`,
-    queued: "You're in the queue",
-    position: (n: number) => `#${n}`,
-    queuedHint: "TODO:text - keep this page open; we'll let you know when it's your turn",
+    position: (n: number, total: number) => `#${n} of ${total}`,
     leaveQueue: "Leave",
-    offered: "It's your turn",
-    offeredHint: (seconds: number) => `Start within ${seconds} s or the next person goes`,
-    start: "Start",
+    yourTurn: (seconds: number) => `Your turn · ${seconds} s`,
+    accept: "Take control",
     decline: "Skip",
-    active: "You're in control",
     remaining: (time: string) => `${time} left`,
     release: "Release",
     ended: {
-      released: "TODO:text - you released the bench",
-      expired: "TODO:text - your time ran out",
-      revoked: "TODO:text - your session was ended by the lab",
+      released: "Released",
+      expired: "Time's up",
+      revoked: "Session ended",
     },
     again: "Join again",
+    offline: "Offline",
+    maintenance: "Maintenance",
   },
 
   controls: {
     title: "Vibrator",
     start: "Start",
     stop: "Stop",
-    needLease: "TODO:text - hint: join the queue to control the vibrator; you can set it up now",
+    needLease: "Join the queue to enable this control",
     unsupported:
       "This bench can't be controlled from here yet: its agent needs updating to the latest version.",
     about: (name: string) => `About ${name}`,

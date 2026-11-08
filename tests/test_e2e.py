@@ -434,6 +434,10 @@ async def test_faraday_experiment_runs_end_to_end(lab: Lab) -> None:
     ]
     assert exp["live"]["start"] == "play_tone"
     assert set(exp["presets"]) >= {"rosette", "cells", "rings", "ridges"}
+    assert exp["slug"] == "faraday-wave"
+    # Experiments without a slug get one from their id.
+    [clip] = [e for e in experiments if e["id"] != "exp_faraday_waves"]
+    assert clip["slug"] == clip["id"].removeprefix("exp_").replace("_", "-")
 
     alice = await lab.guest()
     a = await lease(alice)
