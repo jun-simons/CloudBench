@@ -230,6 +230,25 @@ class LeaseManager:
         await self._after_change(lease.workbench_id)
         return out
 
+    async def end_all(self, reason: str) -> dict[str, int]:
+        """Revoke every open lease on every bench: holders, offers and the whole queue.
+
+        Returns how many leases were ended, by the state they were in. Active leases reset
+        their bench as usual, so anything running stops.
+        """
+        ended: dict[str, int] = {}
+        workbench_ids: set[str] = set()
+        async with self._lock, self.s.db.session() as s:
+            result = await s.execute(select(Lease).where(Lease.state.in_(OPEN_LEASE_STATES)))
+            for lease in result.scalars():
+                ended[lease.state] = ended.get(lease.state, 0) + 1
+                workbench_ids.add(lease.workbench_id)
+                await self._end(s, lease, LeaseState.REVOKED, reason)
+            await s.commit()
+        for workbench_id in workbench_ids:
+            await self._after_change(workbench_id)
+        return ended
+
     async def set_maintenance(self, workbench_id: str, maintenance: bool) -> None:
         async with self._lock, self.s.db.session() as s:
             workbench = await s.get(Workbench, workbench_id)
