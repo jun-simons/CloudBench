@@ -1,17 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { api, ApiError, type ParameterSchema } from "./api";
-import { Controls, LeasePanel, LiveStream, Logo, Welcome } from "./components";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api, ApiError } from "./api";
 import { copy } from "./copy";
+import { CameraCard, GuidePane, LeasePanel, VibratorCard } from "./panes";
+import { Logo, Welcome } from "./ui";
 import { useLab } from "./useLab";
-
-function defaults(parameters: Record<string, ParameterSchema>): Record<string, number | string> {
-  return Object.fromEntries(
-    Object.entries(parameters).map(([name, schema]) => [
-      name,
-      schema.default ?? schema.minimum ?? 0,
-    ]),
-  );
-}
+import { useLiveControl } from "./useLiveControl";
 
 export default function App() {
   const [session, setSession] = useState(api.session);
@@ -28,20 +21,15 @@ export default function App() {
       />
     );
   }
-  return <Lab />;
+  return <Lab name={session.principal.display_name} />;
 }
 
-function Lab() {
-  const lab = useLab(true);
-  const { experiment, workbench, lease, experimentRun } = lab;
-  // Only the values the user changed; the rest come from the experiment's defaults.
-  const [overrides, setOverrides] = useState<Record<string, number | string>>({});
+function Lab({ name }: { name: string }) {
+  const lab = useLab();
+  const { experiment, workbench, lease } = lab;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const values = useMemo(
-    () => ({ ...(experiment ? defaults(experiment.parameters) : {}), ...overrides }),
-    [experiment, overrides],
-  );
+  const control = useLiveControl(lab, setError);
 
   // The stream to show comes from the experiment's first "show" step, via its role binding.
   const stream = useMemo(() => {
@@ -52,8 +40,7 @@ function Lab() {
     )?.bindings;
     if (!show || !("show" in show) || !bindings) return null;
     const [role, streamName] = show.show.split(".");
-    const toolName = role ? bindings[role] : undefined;
-    const tool = workbench.tools.find((t) => t.name === toolName);
+    const tool = workbench.tools.find((t) => t.name === (role ? bindings[role] : undefined));
     const descriptor = tool?.streams.find((s) => s.name === streamName) ?? null;
     if (!tool || !descriptor) return null;
     return {
@@ -64,7 +51,7 @@ function Lab() {
     };
   }, [experiment, workbench]);
 
-  const act = async (fn: () => Promise<unknown>) => {
+  const act = useCallback(async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError(null);
     try {
@@ -74,62 +61,41 @@ function Lab() {
     } finally {
       setBusy(false);
     }
-  };
+  }, []);
 
   const join = () =>
     act(async () => {
-      if (workbench) lab.setLease(await api.requestLease(workbench.id));
+      if (workbench) lab.patch({ lease: await api.requestLease(workbench.id) });
     });
-  const accept = () => act(async () => lease && lab.setLease(await api.acceptLease(lease.id)));
-  const release = () => act(async () => lease && lab.setLease(await api.releaseLease(lease.id)));
-  const runExperiment = () =>
-    act(async () => {
-      if (!experiment || !lease) return;
-      lab.patch({ experimentRun: await api.startExperiment(experiment.id, lease.id, values) });
-    });
-  const stop = () =>
-    act(async () => {
-      if (experimentRun)
-        lab.patch({ experimentRun: await api.cancelExperimentRun(experimentRun.id) });
-    });
+  const accept = () =>
+    act(async () => lease && lab.patch({ lease: await api.acceptLease(lease.id) }));
+  const release = () =>
+    act(async () => lease && lab.patch({ lease: await api.releaseLease(lease.id) }));
+
+  const shownError = error ?? lab.error;
 
   return (
     <div className="app">
       <header className="topbar">
         <Logo />
-        <span
-          className={`conn ${lab.connected ? "ok" : ""}`}
-          title={lab.connected ? "Connected" : "Reconnecting"}
-        />
+        <div className="topbar-user">
+          <span className="muted small">{name}</span>
+          <span
+            className={`conn ${lab.connected ? "ok" : ""}`}
+            title={lab.connected ? "Connected" : "Reconnecting"}
+          />
+        </div>
       </header>
 
-      <main className="content stack">
+      <main className="layout">
         {experiment && (
-          <div className="heading">
+          <div className="page-title heading">
             <h1>{experiment.title}</h1>
             {experiment.summary && <p className="muted">{experiment.summary}</p>}
           </div>
         )}
 
-        <LiveStream
-          url={stream?.url ?? ""}
-          stream={stream?.descriptor ?? null}
-          workbench={workbench}
-        />
-
-        {lease?.state === "active" && experiment ? (
-          <Controls
-            lease={lease}
-            parameters={experiment.parameters}
-            values={values}
-            onChange={(name, value) => setOverrides((v) => ({ ...v, [name]: value }))}
-            run={experimentRun}
-            onRun={runExperiment}
-            onStop={stop}
-            onRelease={release}
-            busy={busy}
-          />
-        ) : (
+        <div className="pane pane-controls">
           <LeasePanel
             workbench={workbench}
             lease={lease}
@@ -138,19 +104,22 @@ function Lab() {
             onRelease={release}
             busy={busy}
           />
-        )}
+          <CameraCard
+            url={stream?.url ?? null}
+            stream={stream?.descriptor ?? null}
+            workbench={workbench}
+          />
+          {experiment && <VibratorCard experiment={experiment} control={control} />}
+        </div>
 
-        {experiment?.notes && (
-          <section className="notes">
-            <h2>{copy.notesHeading}</h2>
-            <p className="muted pre">{experiment.notes}</p>
-          </section>
-        )}
+        <div className="pane pane-guide">
+          {experiment && <GuidePane experiment={experiment} control={control} />}
+        </div>
       </main>
 
-      {(error ?? lab.error) && (
+      {shownError && (
         <div className="toast" role="alert">
-          <span className="grow">{error ?? lab.error}</span>
+          <span className="grow">{shownError}</span>
           <button
             className="link"
             onClick={() => {
