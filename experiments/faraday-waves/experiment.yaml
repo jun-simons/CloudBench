@@ -94,26 +94,26 @@ procedure:
 # Markdown. A link to preset:<id> renders as a button that applies that preset;
 # the link text is the button label (leave it empty to use the preset's label).
 notes: |
-## Meet the Workbench
+  ## Meet the Workbench
 
-You're looking down at a dish of water mounted on top of a subwoofer. The subwoofer acts as a mechanical vibrator, sending controlled vertical vibrations through the dish and into the water. By changing the frequency and amplitude of these vibrations, we can dramatically change how the water behaves.
+  You're looking down at a dish of water mounted on top of a subwoofer. The subwoofer acts as a mechanical vibrator, sending controlled vertical vibrations through the dish and into the water. By changing the frequency and amplitude of these vibrations, we can dramatically change how the water behaves.
 
-At certain frequencies, the water develops **Faraday waves**: stripes, squares, and other standing wave patterns that emerge on the fluid's surface. What you're seeing is a real phenomenon a real workbench!
+  At certain frequencies, the water develops **Faraday waves**: stripes, squares, and other standing wave patterns that emerge on the fluid's surface. What you're seeing is a real phenomenon a real workbench!
 
-## Experiment with Presets
+  ## Experiment with Presets
 
-Not sure where to start? Try one of the presets below to explore different behaviors of the water. Each preset configures the workbench to produce a different wave pattern. Watch the live camera feed as the experiment settles, and see how changing the vibration parameters transforms the surface.
+  Not sure where to start? Try one of the presets below to explore different behaviors of the water. Each preset configures the workbench to produce a different wave pattern. Watch the live camera feed as the experiment settles, and see how changing the vibration parameters transforms the surface.
 
-- **Gentle waves:** Start with subtle vibrations. Look closely for patterns as the water transitions from a relatively flat surface into an organized wave pattern.
-- **Square lattice:** Look for a regular, grid-like arrangement of peaks and troughs. Notice how the waves organize themselves into a repeating square pattern.
-- **Fine lattice:** Observe smaller, more closely spaced wave patterns. Pay attention to how the scale of the patterns differs from the other presets.
-- **Chaotic waves:** Explore a less orderly regime. Look for irregular patterns and competing wave structures.
+  - [](preset:gentle) Start with subtle vibrations. Look closely for patterns as the water transitions from a relatively flat surface into an organized wave pattern.
+  - [](preset:squares) Look for a regular, grid-like arrangement of peaks and troughs. Notice how the waves organize themselves into a repeating square pattern.
+  - [](preset:fine) Observe smaller, more closely spaced wave patterns. Pay attention to how the scale of the patterns differs from the other presets.
+  - [](preset:chaos) Explore a less orderly regime. Look for irregular patterns and competing wave structures.
 
-## Questions to Explore
+  ## Questions to Explore
 
-Try changing the experimental parameters to see if you can discover relationships between the vibrations and the patterns they produce.
+  Try changing the experimental parameters to see if you can discover relationships between the vibrations and the patterns they produce.
 
-- **Frequency vs. spacing:** How does the distance between wave peaks (known as their wavelength) change as you increase the vibration frequency?
-- **The onset of waves:** How much amplitude is required before standing waves first appear? Does this threshold change with frequency?
-- **Pattern formation:** Why do some settings produce stripes while others produce squares or more complex patterns?
-- **Unexpected discoveries:** Can you find a combination of settings that produces a pattern you haven't seen before?
+  - **Frequency vs. spacing:** How does the distance between wave peaks (known as their wavelength) change as you increase the vibration frequency?
+  - **The onset of waves:** How much amplitude is required before standing waves first appear? Does this threshold change with frequency?
+  - **Pattern formation:** Why do some settings produce stripes while others produce squares or more complex patterns?
+  - **Unexpected discoveries:** Can you find a combination of settings that produces a pattern you haven't seen before?
