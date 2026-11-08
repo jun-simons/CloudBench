@@ -18,6 +18,7 @@ gateway = [
     "aiosqlite>=0.20",
     "python-multipart>=0.0.17",
     "jsonschema>=4.23",
+    "numpy>=1.26",
 ]
 agent = [
     "websockets>=13.1",
