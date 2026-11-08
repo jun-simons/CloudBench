@@ -7,6 +7,16 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>CloudBench</title>
+    <script>
+      // Apply the theme before first paint so the page does not flash; useTheme takes over.
+      try {
+        const chosen = JSON.parse(localStorage.getItem("cloudbench.theme"));
+        const light = window.matchMedia("(prefers-color-scheme: light)").matches;
+        document.documentElement.dataset.theme = chosen || (light ? "light" : "dark");
+      } catch {
+        document.documentElement.dataset.theme = "dark";
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

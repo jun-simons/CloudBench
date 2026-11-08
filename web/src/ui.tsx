@@ -1,8 +1,9 @@
 // Small, reusable UI building blocks.
 
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { copy } from "./copy";
 import { usePersistentState } from "./useLab";
+import type { Theme } from "./useDisplay";
 
 /** A card with a header that collapses its body; the collapsed state is remembered. */
 export function CollapsibleCard({
@@ -17,7 +18,7 @@ export function CollapsibleCard({
   title: ReactNode;
   /** Shown next to the title, collapsed or not (e.g. a Live badge). */
   badge?: ReactNode;
-  /** Controls in the header that stay usable while collapsed (e.g. a power switch). */
+  /** Controls in the header that stay usable while collapsed (e.g. a Start/Stop button). */
   actions?: ReactNode;
   children: ReactNode;
   defaultOpen?: boolean;
@@ -38,8 +39,7 @@ export function CollapsibleCard({
           <h2>{title}</h2>
         </button>
         {badge}
-        <div className="grow" />
-        {actions}
+        {actions && <div className="card-actions">{actions}</div>}
       </header>
       <div id={bodyId} className="card-body" hidden={!open}>
         {children}
@@ -66,32 +66,6 @@ function Chevron({ open }: { open: boolean }) {
         strokeLinejoin="round"
       />
     </svg>
-  );
-}
-
-export function Switch({
-  checked,
-  disabled,
-  label,
-  onChange,
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  label: string;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      className={`switch ${checked ? "on" : ""}`}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-    >
-      <span className="switch-thumb" />
-    </button>
   );
 }
 
@@ -186,5 +160,87 @@ export function Welcome({ onSubmit }: { onSubmit: (name: string) => Promise<void
         </button>
       </form>
     </main>
+  );
+}
+
+/**
+ * An "i" button that reveals a short explanation: on hover with a mouse, on tap on
+ * touch screens. Keeps descriptive text out of the way until someone asks for it.
+ */
+export function InfoTip({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const id = useId();
+
+  // Close on a tap or click anywhere else, and on Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <span ref={ref} className={`infotip ${open ? "open" : ""}`}>
+      <button
+        type="button"
+        className="infotip-button"
+        aria-label={label}
+        aria-describedby={id}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.3" />
+          <path d="M8 7.2v3.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="8" cy="4.9" r="0.95" fill="currentColor" />
+        </svg>
+      </button>
+      <span role="tooltip" id={id} className="infotip-bubble">
+        {children}
+      </span>
+    </span>
+  );
+}
+
+export function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
+  const label = theme === "dark" ? copy.theme.toLight : copy.theme.toDark;
+  return (
+    <button
+      type="button"
+      className="icon-button"
+      aria-label={label}
+      title={label}
+      onClick={onToggle}
+    >
+      {theme === "dark" ? (
+        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+          <circle cx="10" cy="10" r="3.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <path
+            d="M10 1.8v2M10 16.2v2M1.8 10h2M16.2 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M4.2 15.8l1.4-1.4M14.4 5.6l1.4-1.4"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+          <path
+            d="M16.5 12.3A7 7 0 0 1 7.7 3.5a7 7 0 1 0 8.8 8.8Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
+    </button>
   );
 }
