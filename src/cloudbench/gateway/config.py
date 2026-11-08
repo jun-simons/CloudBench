@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 
 from pydantic import Field
@@ -19,8 +20,10 @@ class GatewaySettings(BaseSettings):
     # Built web app to serve at "/". Optional; the API works without it.
     web_dir: Path | None = None
 
-    # Secret used to sign short-lived file download URLs for agents.
-    signing_secret: str = Field(default="dev-signing-secret-change-me", min_length=16)
+    # Secret used to sign short-lived file download URLs for agents. Links live for
+    # file_url_ttl_s, so a random per-process secret (the default) is fine for a
+    # single gateway; set it explicitly when running several behind a load balancer.
+    signing_secret: str = Field(default_factory=lambda: secrets.token_hex(32), min_length=16)
     # Per-workbench agent secrets, e.g. {"wb_faraday": "s3cret"}.
     # Env form: CLOUDBENCH_AGENT_SECRETS='{"wb_faraday": "s3cret"}'
     agent_secrets: dict[str, str] = Field(default_factory=dict)

@@ -14,6 +14,6 @@ data/
 web/node_modules/
 web/dist/
 
-# Local config with secrets
+# Local config with secrets (also matches deploy/.env)
 .env
 agent.local.yaml
