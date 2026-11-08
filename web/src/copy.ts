@@ -13,8 +13,8 @@ export const copy = {
   },
 
   welcome: {
-    heading: "TODO:text - welcome heading",
-    body: "TODO:text - one or two sentences on what CloudBench is and what you are about to do",
+    heading: "CloudBench: Your lab in the cloud",
+    body: "Join our HackRPI demo to create Faraday waves from your device.",
     nameLabel: "Your name",
     namePlaceholder: "e.g. Ada",
     continue: "Continue",

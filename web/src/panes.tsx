@@ -586,72 +586,89 @@ function PresetButton({
 
 const PRESET_PREFIX = "preset:";
 
-/** A tiny stand-in for one point of the dish's surface pattern, for PresetIcon. */
-function Dots({ spacing, r, offset = 0 }: { spacing: number; r: number; offset?: number }) {
-  const points: number[] = [];
-  for (let v = 4 + offset; v <= 44; v += spacing) points.push(v);
-  return (
-    <>
-      {points.flatMap((x) =>
-        points.map((y) => <circle key={`${x},${y}`} cx={x} cy={y} r={r} fill="currentColor" />),
-      )}
-    </>
-  );
-}
+// Pictures for PresetIcon, drawn in a 48x48 box around the dish centre (24, 24).
 
-// Irregular blobs for the chaotic regime: [x, y, r], fixed so the picture does not change.
-const CHAOS = [
-  [12, 14, 3.2],
-  [22, 9, 1.8],
-  [31, 13, 2.6],
-  [39, 20, 1.6],
-  [17, 22, 1.5],
-  [27, 21, 3.4],
-  [9, 29, 2.2],
-  [20, 31, 2.8],
-  [33, 29, 1.9],
-  [40, 33, 2.7],
-  [14, 39, 1.7],
-  [25, 40, 2.4],
-  [33, 40, 1.4],
-  [6, 20, 1.3],
-  [28, 31, 1.2],
-  [21, 16, 1.1],
-] as const;
+/** Pointy-top hexagons tiling the dish: the honeycomb's cells. */
+const HEX_CELLS = (() => {
+  const r = 4.4;
+  const w = Math.sqrt(3) * r;
+  const corners = [-90, -30, 30, 90, 150, 210].map((deg) => [
+    r * Math.cos((deg * Math.PI) / 180),
+    r * Math.sin((deg * Math.PI) / 180),
+  ]);
+  const paths: string[] = [];
+  for (let row = 0; row * 1.5 * r <= 48 + r; row++) {
+    const y = row * 1.5 * r;
+    for (let x = row % 2 ? w / 2 : 0; x <= 48 + w; x += w) {
+      paths.push(
+        "M" +
+          corners
+            .map(([dx = 0, dy = 0]) => `${(x + dx).toFixed(2)} ${(y + dy).toFixed(2)}`)
+            .join("L") +
+          "Z",
+      );
+    }
+  }
+  return paths.join("");
+})();
 
 /**
  * A preset's picture: the dish seen from above with the pattern to look for. The
- * experiment names the picture with `icon`; these drawings are placeholders until
- * ones that match the real patterns replace them.
+ * experiment names the picture with `icon`; unknown names get a plain wave.
  */
 export function PresetIcon({ name }: { name: string | null }) {
   const clip = `dish-${useId().replace(/:/g, "")}`;
   let pattern: ReactNode;
   switch (name) {
-    case "ripples":
-      pattern = [5, 10, 15, 20].map((r, i) => (
-        <circle
-          key={r}
-          cx="24"
-          cy="24"
-          r={r}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          opacity={1 - i * 0.2}
-        />
+    case "rosette":
+      // Ten petals around a small centre.
+      pattern = (
+        <>
+          {Array.from({ length: 10 }, (_, i) => (
+            <ellipse
+              key={i}
+              cx="24"
+              cy="14"
+              rx="2.6"
+              ry="8"
+              transform={`rotate(${i * 36} 24 24)`}
+              fill="currentColor"
+              fillOpacity="0.3"
+              stroke="currentColor"
+              strokeWidth="1.1"
+            />
+          ))}
+          <circle cx="24" cy="24" r="2.6" fill="currentColor" />
+        </>
+      );
+      break;
+    case "hex-cells":
+      pattern = <path d={HEX_CELLS} fill="none" stroke="currentColor" strokeWidth="1.2" />;
+      break;
+    case "rings":
+      pattern = [4, 8, 12, 16, 20].map((r) => (
+        <circle key={r} cx="24" cy="24" r={r} fill="none" stroke="currentColor" strokeWidth="1.6" />
       ));
       break;
-    case "square-lattice":
-      pattern = <Dots spacing={8} r={2.4} />;
-      break;
-    case "fine-lattice":
-      pattern = <Dots spacing={4.5} r={1.15} offset={-1} />;
-      break;
-    case "chaos":
-      pattern = CHAOS.map(([x, y, r]) => (
-        <circle key={`${x},${y}`} cx={x} cy={y} r={r} fill="currentColor" />
-      ));
+    case "ridges":
+      // Wide, slow swells, with a couple of small jumping droplets.
+      pattern = (
+        <>
+          {[10, 21, 32, 43].map((y) => (
+            <path
+              key={y}
+              d={`M-2 ${y}q6.5-6 13 0t13 0t13 0t13 0`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3.4"
+              strokeLinecap="round"
+              opacity="0.8"
+            />
+          ))}
+          <circle cx="17" cy="15.5" r="1.3" fill="currentColor" />
+          <circle cx="32" cy="27" r="1" fill="currentColor" />
+        </>
+      );
       break;
     default:
       pattern = (
@@ -752,7 +769,7 @@ function PresetGallery({
     <div className="preset-gallery">
       <div
         className="preset-tiles"
-        style={{ gridTemplateColumns: `repeat(${Math.min(items.length, 4)}, minmax(0, 1fr))` }}
+        style={{ "--columns": Math.min(items.length, 4) } as CSSProperties}
       >
         {items.map((item) => {
           const isSelected = item === selected;
