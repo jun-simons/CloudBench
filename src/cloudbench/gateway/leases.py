@@ -90,9 +90,13 @@ class LeaseManager:
 
     async def to_out(self, session: AsyncSession, lease: Lease) -> LeaseOut:
         queued = await self._queued(session, lease.workbench_id)
+        if lease.state == LeaseState.QUEUED and all(q.id != lease.id for q in queued):
+            # The queue moved on (e.g. the tick offered this lease) after the lease was
+            # loaded; SQLite reads are not one snapshot, so reload it to match the queue.
+            await session.refresh(lease)
         position = None
         if lease.state == LeaseState.QUEUED:
-            position = next(i for i, q in enumerate(queued, start=1) if q.id == lease.id)
+            position = next((i for i, q in enumerate(queued, start=1) if q.id == lease.id), None)
         holder = await session.get(Principal, lease.principal_id)
         return LeaseOut(
             id=lease.id,

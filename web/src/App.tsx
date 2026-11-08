@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "./api";
 import { copy } from "./copy";
-import { CameraCard, GuidePane, LeasePanel, VibratorCard } from "./panes";
-import { Logo, Welcome } from "./ui";
-import { useLab } from "./useLab";
+import {
+  CameraCard,
+  GuidePane,
+  LeasePanel,
+  StreamGrid,
+  VibratorCard,
+  type StreamSource,
+} from "./panes";
+import { Logo, ThemeToggle, Welcome } from "./ui";
+import { useMediaQuery, useTheme } from "./useDisplay";
+import { useLab, type LabState } from "./useLab";
 import { useLiveControl } from "./useLiveControl";
 
 export default function App() {
@@ -31,27 +39,10 @@ function Lab({ name }: { name: string }) {
   const [error, setError] = useState<string | null>(null);
   const control = useLiveControl(lab, setError);
 
-  // The stream to show comes from the experiment's first "show" step, via its role binding.
-  // If the bench does not (yet) match the experiment, e.g. its agent is an older version,
-  // fall back to the bench's first stream: the video is still worth watching.
-  const stream = useMemo(() => {
-    if (!experiment || !workbench) return null;
-    const show = experiment.procedure.find((s) => "show" in s);
-    const bindings = experiment.compatible_workbenches.find(
-      (c) => c.workbench_id === workbench.id,
-    )?.bindings;
-    const [role, streamName] = show && "show" in show ? show.show.split(".") : [];
-    const bound = workbench.tools.find((t) => t.name === (role ? bindings?.[role] : undefined));
-    const tool = bound ?? workbench.tools.find((t) => t.streams.length > 0);
-    const descriptor = tool?.streams.find((s) => s.name === streamName) ?? tool?.streams[0] ?? null;
-    if (!tool || !descriptor) return null;
-    return {
-      descriptor,
-      url: api.authedUrl(
-        `/v1/workbenches/${workbench.id}/tools/${tool.name}/streams/${descriptor.name}`,
-      ),
-    };
-  }, [experiment, workbench]);
+  const streams = useStreams(lab);
+  const desktop = useMediaQuery("(min-width: 960px)");
+  const wide = useMediaQuery("(min-width: 1280px)");
+  const [theme, toggleTheme] = useTheme();
 
   const act = useCallback(async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -76,17 +67,80 @@ function Lab({ name }: { name: string }) {
 
   const shownError = error ?? lab.error;
 
+  const user = (
+    <div className="topbar-user">
+      <ThemeToggle theme={theme} onToggle={toggleTheme} />
+      <span className="muted small">{name}</span>
+      <span
+        className={`conn ${lab.connected ? "ok" : ""}`}
+        title={lab.connected ? "Connected" : "Reconnecting"}
+      />
+    </div>
+  );
+  const leasePanel = (
+    <LeasePanel
+      workbench={workbench}
+      lease={lease}
+      onJoin={join}
+      onAccept={accept}
+      onRelease={release}
+      busy={busy}
+    />
+  );
+  const vibrator = experiment && <VibratorCard experiment={experiment} control={control} />;
+  const guide = experiment && <GuidePane experiment={experiment} control={control} />;
+  const toast = shownError && (
+    <div className="toast" role="alert">
+      <span className="grow">{shownError}</span>
+      <button
+        className="link"
+        onClick={() => {
+          setError(null);
+          lab.patch({ error: null });
+        }}
+      >
+        {copy.dismiss}
+      </button>
+    </div>
+  );
+
+  if (desktop) {
+    // A workstation layout: controls on the left, every stream in the middle, the guide
+    // on the right (under the controls on narrower screens). Each column scrolls alone.
+    return (
+      <div className="app desktop">
+        <header className="topbar">
+          <Logo />
+          {experiment && (
+            <div className="topbar-title">
+              <h1>{experiment.title}</h1>
+              {experiment.summary && <span className="muted">{experiment.summary}</span>}
+            </div>
+          )}
+          {user}
+        </header>
+        <main className={`workspace ${wide ? "wide" : ""}`}>
+          <aside className="column column-side">
+            {leasePanel}
+            {vibrator}
+            {!wide && guide}
+          </aside>
+          <section className="column-streams">
+            <StreamGrid streams={streams} workbench={workbench} />
+          </section>
+          {wide && <aside className="column column-guide">{guide}</aside>}
+        </main>
+        {toast}
+      </div>
+    );
+  }
+
+  const [primary = null, ...others] = streams;
   return (
     <div className="app">
       <header className="topbar">
         <Logo />
-        <div className="topbar-user">
-          <span className="muted small">{name}</span>
-          <span
-            className={`conn ${lab.connected ? "ok" : ""}`}
-            title={lab.connected ? "Connected" : "Reconnecting"}
-          />
-        </div>
+        {user}
       </header>
 
       <main className="layout">
@@ -98,41 +152,62 @@ function Lab({ name }: { name: string }) {
         )}
 
         <div className="pane pane-controls">
-          <LeasePanel
-            workbench={workbench}
-            lease={lease}
-            onJoin={join}
-            onAccept={accept}
-            onRelease={release}
-            busy={busy}
-          />
-          <CameraCard
-            url={stream?.url ?? null}
-            stream={stream?.descriptor ?? null}
-            workbench={workbench}
-          />
-          {experiment && <VibratorCard experiment={experiment} control={control} />}
+          {leasePanel}
+          <CameraCard source={primary} workbench={workbench} />
+          {vibrator}
+          {/* Extra outputs (e.g. computer vision overlays) come after the controls, collapsed,
+              so the camera and vibrator stay together on a phone. */}
+          {others.map((source) => (
+            <CameraCard key={source.key} source={source} workbench={workbench} />
+          ))}
         </div>
 
-        <div className="pane pane-guide">
-          {experiment && <GuidePane experiment={experiment} control={control} />}
-        </div>
+        <div className="pane pane-guide">{guide}</div>
       </main>
 
-      {shownError && (
-        <div className="toast" role="alert">
-          <span className="grow">{shownError}</span>
-          <button
-            className="link"
-            onClick={() => {
-              setError(null);
-              lab.patch({ error: null });
-            }}
-          >
-            {copy.dismiss}
-          </button>
-        </div>
-      )}
+      {toast}
     </div>
   );
+}
+
+/** Title for a stream that is not the experiment's main view, from its name: "edge_map" → "Edge map". */
+function streamTitle(name: string): string {
+  const words = name.replace(/[_-]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * Every stream on the bench, the experiment's main view first. The main view comes from
+ * the experiment's first "show" step, via its role binding. If the bench does not (yet)
+ * match the experiment, e.g. its agent is an older version, the bench's first stream is
+ * the main view: the video is still worth watching.
+ */
+function useStreams({ experiment, workbench }: LabState): StreamSource[] {
+  return useMemo(() => {
+    if (!workbench) return [];
+    const show = experiment?.procedure.find((s) => "show" in s);
+    const bindings = experiment?.compatible_workbenches.find(
+      (c) => c.workbench_id === workbench.id,
+    )?.bindings;
+    const [role, streamName] = show && "show" in show ? show.show.split(".") : [];
+    const bound = workbench.tools.find((t) => t.name === (role ? bindings?.[role] : undefined));
+    const mainTool = bound ?? workbench.tools.find((t) => t.streams.length > 0);
+    const mainStream = mainTool?.streams.find((s) => s.name === streamName) ?? mainTool?.streams[0];
+
+    const all = workbench.tools.flatMap((tool) =>
+      tool.streams.map((descriptor) => {
+        const primary = tool === mainTool && descriptor === mainStream;
+        return {
+          key: `${tool.name}/${descriptor.name}`,
+          title: primary ? copy.camera.title : streamTitle(descriptor.name),
+          descriptor,
+          url: api.authedUrl(
+            `/v1/workbenches/${workbench.id}/tools/${tool.name}/streams/${descriptor.name}`,
+          ),
+          primary,
+        };
+      }),
+    );
+    return [...all.filter((s) => s.primary), ...all.filter((s) => !s.primary)];
+  }, [experiment, workbench]);
 }

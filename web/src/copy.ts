@@ -7,6 +7,11 @@
 export const copy = {
   appName: "CloudBench",
 
+  theme: {
+    toLight: "Switch to light theme",
+    toDark: "Switch to dark theme",
+  },
+
   welcome: {
     heading: "TODO:text - welcome heading",
     body: "TODO:text - one or two sentences on what CloudBench is and what you are about to do",
@@ -26,6 +31,11 @@ export const copy = {
     offline: "Offline",
     inUseBy: (name: string) => `In use by ${name}`,
     resetting: "Resetting",
+    /** Technical details shown in a stream pane's header on desktop, e.g. "1280×720 · 30 fps". */
+    meta: (width: number | null, height: number | null, fps: number | null) =>
+      [width && height ? `${width}×${height}` : null, fps ? `${fps} fps` : null]
+        .filter(Boolean)
+        .join(" · "),
   },
 
   bench: {
@@ -60,11 +70,13 @@ export const copy = {
 
   controls: {
     title: "Vibrator",
-    power: "Vibrator power",
-    off: "TODO:text - hint: switch on to start shaking the dish",
+    start: "Start",
+    stop: "Stop",
     needLease: "TODO:text - hint: join the queue to control the vibrator; you can set it up now",
     unsupported:
       "This bench can't be controlled from here yet: its agent needs updating to the latest version.",
+    about: (name: string) => `About ${name}`,
+    typeValue: (name: string) => `${name}: type a value`,
     increase: (name: string) => `Increase ${name}`,
     decrease: (name: string) => `Decrease ${name}`,
   },

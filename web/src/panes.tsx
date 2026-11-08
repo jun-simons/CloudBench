@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type {
@@ -12,7 +12,7 @@ import type {
   Workbench,
 } from "./api";
 import { copy } from "./copy";
-import { CollapsibleCard, Segmented, Switch } from "./ui";
+import { CollapsibleCard, InfoTip, Segmented } from "./ui";
 import { formatClock, secondsUntil, useNow } from "./useLab";
 import { matchesPreset, type LiveControlState } from "./useLiveControl";
 
@@ -135,55 +135,149 @@ export function LeasePanel({
 
 // --------------------------------------------------------------------------- camera
 
-export function CameraCard({
-  url,
-  stream,
+/** One video stream from the bench, ready to show. */
+export interface StreamSource {
+  /** Unique per bench: "<tool>/<stream>". */
+  key: string;
+  title: string;
+  descriptor: StreamDescriptor;
+  url: string;
+  /** The stream the experiment asks to show; the others are extra outputs. */
+  primary: boolean;
+}
+
+function LiveBadge({ online }: { online: boolean }) {
+  return online ? (
+    <span className="badge live">
+      <span className="dot" /> {copy.stream.live}
+    </span>
+  ) : (
+    <span className="badge muted-badge">{copy.stream.offline}</span>
+  );
+}
+
+/**
+ * The video itself. With `fill` it takes the size its container gives it (desktop
+ * panes); otherwise it keeps the stream's aspect ratio (mobile cards).
+ */
+function StreamView({
+  source,
   workbench,
+  fill = false,
 }: {
-  url: string | null;
-  stream: StreamDescriptor | null;
+  source: StreamSource | null;
   workbench: Workbench | null;
+  fill?: boolean;
 }) {
   // Bumping the key remounts the <img>, which reconnects a dropped stream. The <img>
   // is also unmounted while the bench is offline, so it reconnects when it returns.
   const [attempt, setAttempt] = useState(0);
-  const online = workbench?.status === "online" && url !== null;
-  const ratio = stream?.width && stream?.height ? stream.width / stream.height : 16 / 9;
+  // The attempt whose <img> failed; hidden until the retry, so no broken-image icon shows.
+  const [failedAttempt, setFailedAttempt] = useState<number | null>(null);
+  const online = workbench?.status === "online" && source !== null;
+  const { width, height } = source?.descriptor ?? {};
+  const ratio = width && height ? width / height : 16 / 9;
+  const url = source?.url ?? "";
 
   return (
-    <CollapsibleCard
-      id="camera"
-      title={copy.camera.title}
-      badge={
-        online ? (
-          <span className="badge live">
-            <span className="dot" /> {copy.stream.live}
-          </span>
-        ) : (
-          <span className="badge muted-badge">{copy.stream.offline}</span>
-        )
-      }
+    <div
+      className={`stream ${fill ? "fill" : ""}`}
+      style={fill ? undefined : ({ aspectRatio: ratio, "--ratio": ratio } as CSSProperties)}
     >
-      <div className="stream" style={{ aspectRatio: ratio, "--ratio": ratio } as CSSProperties}>
-        <div className="stream-placeholder">
-          {online ? copy.stream.connecting : copy.stream.offline}
-        </div>
-        {online && (
-          <img
-            key={attempt}
-            src={`${url}${url.includes("?") ? "&" : "?"}attempt=${attempt}`}
-            alt={copy.camera.alt}
-            onError={() => window.setTimeout(() => setAttempt((a) => a + 1), 2000)}
-          />
-        )}
+      <div className="stream-placeholder">
+        {online ? copy.stream.connecting : copy.stream.offline}
+      </div>
+      {online && (
+        <img
+          key={attempt}
+          src={`${url}${url.includes("?") ? "&" : "?"}attempt=${attempt}`}
+          alt={source.primary ? copy.camera.alt : source.title}
+          className={failedAttempt === attempt ? "failed" : ""}
+          onError={() => {
+            setFailedAttempt(attempt);
+            window.setTimeout(() => setAttempt((a) => a + 1), 2000);
+          }}
+        />
+      )}
+      {(source?.primary ?? true) && (
         <div className="stream-badges">
           {workbench?.resetting && <span className="badge">{copy.stream.resetting}</span>}
           {workbench?.current_holder && (
             <span className="badge">{copy.stream.inUseBy(workbench.current_holder)}</span>
           )}
         </div>
-      </div>
+      )}
+    </div>
+  );
+}
+
+/** A stream as a collapsible card (mobile). */
+export function CameraCard({
+  source,
+  workbench,
+}: {
+  source: StreamSource | null;
+  workbench: Workbench | null;
+}) {
+  const online = workbench?.status === "online" && source !== null;
+  return (
+    <CollapsibleCard
+      // The primary stream keeps the "camera" id so its remembered collapsed state carries over.
+      id={!source || source.primary ? "camera" : `stream-${source.key}`}
+      title={source && !source.primary ? source.title : copy.camera.title}
+      badge={<LiveBadge online={online} />}
+      defaultOpen={!source || source.primary}
+    >
+      <StreamView source={source} workbench={workbench} />
     </CollapsibleCard>
+  );
+}
+
+function StreamPane({
+  source,
+  workbench,
+}: {
+  source: StreamSource | null;
+  workbench: Workbench | null;
+}) {
+  const online = workbench?.status === "online" && source !== null;
+  const d = source?.descriptor;
+  const meta = d ? copy.stream.meta(d.width, d.height, d.fps) : "";
+  return (
+    <section className="panel stream-pane">
+      <header className="panel-header">
+        <h2>{source?.title ?? copy.camera.title}</h2>
+        <LiveBadge online={online} />
+        {meta && <span className="panel-meta">{meta}</span>}
+      </header>
+      <StreamView source={source} workbench={workbench} fill />
+    </section>
+  );
+}
+
+/**
+ * Every stream on the bench, for desktop: the experiment's main view large, and extra
+ * outputs (e.g. computer vision overlays from the camera tool) in a row underneath.
+ */
+export function StreamGrid({
+  streams,
+  workbench,
+}: {
+  streams: StreamSource[];
+  workbench: Workbench | null;
+}) {
+  const [primary = null, ...others] = streams;
+  return (
+    <div className={`stream-grid ${others.length > 0 ? "has-others" : ""}`}>
+      <StreamPane source={primary} workbench={workbench} />
+      {others.length > 0 && (
+        <div className="stream-others">
+          {others.map((source) => (
+            <StreamPane key={source.key} source={source} workbench={workbench} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -210,6 +304,100 @@ function ShapeIcon({ shape }: { shape: string }) {
   );
 }
 
+/** A parameter's label, with its description behind an info button when it has one. */
+function FieldLabel({
+  name,
+  schema,
+  htmlFor,
+}: {
+  name: string;
+  schema: ParameterSchema;
+  htmlFor?: string;
+}) {
+  const title = schema.title ?? name;
+  return (
+    <span className="field-label">
+      {htmlFor ? (
+        <label htmlFor={htmlFor} className="label">
+          {title}
+        </label>
+      ) : (
+        <span className="label">{title}</span>
+      )}
+      {schema.description && (
+        <InfoTip label={copy.controls.about(title)}>{schema.description}</InfoTip>
+      )}
+    </span>
+  );
+}
+
+/**
+ * The number next to a slider, which can also be typed into. Percentages are typed as
+ * whole percent. Out-of-range values are capped to the parameter's limits on commit.
+ */
+function ValueInput({
+  schema,
+  title,
+  value,
+  clamp,
+  onChange,
+}: {
+  schema: ParameterSchema;
+  title: string;
+  value: number;
+  clamp: (value: number) => number;
+  onChange: (value: number) => void;
+}) {
+  const percent = schema["x-format"] === "percent";
+  const unit = percent ? "%" : (schema["x-unit"] ?? "");
+  const shown = percent ? Math.round(value * 100) : Number(value.toFixed(3));
+  // Text being typed; null when not editing, so the field follows the slider.
+  const [draft, setDraft] = useState<string | null>(null);
+  const cancelled = useRef(false);
+
+  const commit = () => {
+    const text = draft;
+    setDraft(null);
+    if (cancelled.current || text === null) {
+      cancelled.current = false;
+      return;
+    }
+    const typed = Number(text.replace(",", ".").trim());
+    if (text.trim() === "" || !Number.isFinite(typed)) return;
+    const next = clamp(percent ? typed / 100 : typed);
+    if (next !== value) onChange(next);
+  };
+
+  return (
+    <label className="value">
+      <input
+        className="value-input"
+        type="text"
+        inputMode="decimal"
+        enterKeyHint="done"
+        autoComplete="off"
+        aria-label={copy.controls.typeValue(title)}
+        size={Math.max(2, String(shown).length)}
+        value={draft ?? String(shown)}
+        onFocus={(e) => {
+          setDraft(String(shown));
+          e.currentTarget.select();
+        }}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            cancelled.current = true;
+            e.currentTarget.blur();
+          }
+        }}
+      />
+      {unit && <span className="value-unit">{unit}</span>}
+    </label>
+  );
+}
+
 function NumberControl({
   name,
   schema,
@@ -222,6 +410,7 @@ function NumberControl({
   onChange: (value: number) => void;
 }) {
   const id = `param-${name}`;
+  const title = schema.title ?? name;
   const step = schema["x-step"] ?? (schema.type === "integer" ? 1 : 0.01);
   const min = schema.minimum ?? 0;
   const max = schema.maximum ?? 1;
@@ -233,24 +422,26 @@ function NumberControl({
   return (
     <div className="field">
       <div className="field-header">
-        <label htmlFor={id} className="label">
-          {schema.title ?? name}
-        </label>
+        <FieldLabel name={name} schema={schema} htmlFor={id} />
         <div className="stepper">
           <button
             type="button"
-            aria-label={copy.controls.decrease(schema.title ?? name)}
+            aria-label={copy.controls.decrease(title)}
             onClick={() => onChange(clamp(value - nudge))}
             disabled={value <= min}
           >
             −
           </button>
-          <output htmlFor={id} className="value">
-            {formatValue(schema, value)}
-          </output>
+          <ValueInput
+            schema={schema}
+            title={title}
+            value={value}
+            clamp={clamp}
+            onChange={onChange}
+          />
           <button
             type="button"
-            aria-label={copy.controls.increase(schema.title ?? name)}
+            aria-label={copy.controls.increase(title)}
             onClick={() => onChange(clamp(value + nudge))}
             disabled={value >= max}
           >
@@ -268,7 +459,6 @@ function NumberControl({
         style={{ "--fill": `${percentFill}%` } as CSSProperties}
         onChange={(e) => onChange(Number(e.target.value))}
       />
-      {schema.description && <p className="field-description">{schema.description}</p>}
     </div>
   );
 }
@@ -286,29 +476,48 @@ export function VibratorCard({
   const summary = live.parameters
     .map((name) => formatValue(experiment.parameters[name], values[name] ?? ""))
     .join(" · ");
-  const hint = on
-    ? null
-    : canControl
-      ? copy.controls.off
-      : control.holdsLease && !control.tool
-        ? copy.controls.unsupported
-        : copy.controls.needLease;
+  // Only a bench that cannot be controlled at all needs explaining in the card; why Start
+  // is disabled before you have the bench is a tooltip, as the lease panel says it already.
+  const unsupported = control.holdsLease && !control.tool;
+  const disabledReason = canControl
+    ? undefined
+    : unsupported
+      ? copy.controls.unsupported
+      : copy.controls.needLease;
 
   return (
     <CollapsibleCard
       id="vibrator"
       title={copy.controls.title}
-      badge={<span className={`badge ${on ? "on-badge" : "muted-badge"}`}>{summary}</span>}
+      badge={
+        <span className={`badge ${on ? "on-badge" : "muted-badge"}`}>
+          <span className="badge-text">{summary}</span>
+        </span>
+      }
       actions={
-        <Switch
-          checked={on}
-          disabled={!canControl || busy}
-          label={copy.controls.power}
-          onChange={(next) => void setOn(next)}
-        />
+        <span title={disabledReason}>
+          <button
+            type="button"
+            className={`compact power ${on ? "danger" : "primary"}`}
+            disabled={!canControl || busy}
+            onClick={() => void setOn(!on)}
+          >
+            <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+              {on ? (
+                <rect x="1.5" y="1.5" width="9" height="9" rx="1.5" fill="currentColor" />
+              ) : (
+                <path
+                  d="M3 1.6v8.8a.6.6 0 0 0 .9.5l7-4.4a.6.6 0 0 0 0-1L3.9 1.1a.6.6 0 0 0-.9.5Z"
+                  fill="currentColor"
+                />
+              )}
+            </svg>
+            {on ? copy.controls.stop : copy.controls.start}
+          </button>
+        </span>
       }
     >
-      {hint && <p className="small muted vibrator-hint">{hint}</p>}
+      {unsupported && <p className="small vibrator-warning">{copy.controls.unsupported}</p>}
       {live.parameters.map((name) => {
         const schema = experiment.parameters[name];
         if (!schema) return null;
@@ -316,7 +525,9 @@ export function VibratorCard({
         if (schema.enum) {
           return (
             <div className="field" key={name}>
-              <span className="label">{schema.title ?? name}</span>
+              <div className="field-header">
+                <FieldLabel name={name} schema={schema} />
+              </div>
               <Segmented
                 label={schema.title ?? name}
                 value={String(value)}
@@ -327,7 +538,6 @@ export function VibratorCard({
                 }))}
                 onChange={(v) => setValue(name, v)}
               />
-              {schema.description && <p className="field-description">{schema.description}</p>}
             </div>
           );
         }
@@ -376,6 +586,205 @@ function PresetButton({
 
 const PRESET_PREFIX = "preset:";
 
+/** A tiny stand-in for one point of the dish's surface pattern, for PresetIcon. */
+function Dots({ spacing, r, offset = 0 }: { spacing: number; r: number; offset?: number }) {
+  const points: number[] = [];
+  for (let v = 4 + offset; v <= 44; v += spacing) points.push(v);
+  return (
+    <>
+      {points.flatMap((x) =>
+        points.map((y) => <circle key={`${x},${y}`} cx={x} cy={y} r={r} fill="currentColor" />),
+      )}
+    </>
+  );
+}
+
+// Irregular blobs for the chaotic regime: [x, y, r], fixed so the picture does not change.
+const CHAOS = [
+  [12, 14, 3.2],
+  [22, 9, 1.8],
+  [31, 13, 2.6],
+  [39, 20, 1.6],
+  [17, 22, 1.5],
+  [27, 21, 3.4],
+  [9, 29, 2.2],
+  [20, 31, 2.8],
+  [33, 29, 1.9],
+  [40, 33, 2.7],
+  [14, 39, 1.7],
+  [25, 40, 2.4],
+  [33, 40, 1.4],
+  [6, 20, 1.3],
+  [28, 31, 1.2],
+  [21, 16, 1.1],
+] as const;
+
+/**
+ * A preset's picture: the dish seen from above with the pattern to look for. The
+ * experiment names the picture with `icon`; these drawings are placeholders until
+ * ones that match the real patterns replace them.
+ */
+export function PresetIcon({ name }: { name: string | null }) {
+  const clip = `dish-${useId().replace(/:/g, "")}`;
+  let pattern: ReactNode;
+  switch (name) {
+    case "ripples":
+      pattern = [5, 10, 15, 20].map((r, i) => (
+        <circle
+          key={r}
+          cx="24"
+          cy="24"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          opacity={1 - i * 0.2}
+        />
+      ));
+      break;
+    case "square-lattice":
+      pattern = <Dots spacing={8} r={2.4} />;
+      break;
+    case "fine-lattice":
+      pattern = <Dots spacing={4.5} r={1.15} offset={-1} />;
+      break;
+    case "chaos":
+      pattern = CHAOS.map(([x, y, r]) => (
+        <circle key={`${x},${y}`} cx={x} cy={y} r={r} fill="currentColor" />
+      ));
+      break;
+    default:
+      pattern = (
+        <path
+          d="M4 24c5-9 9-9 14 0s9 9 14 0 9-9 14 0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      );
+  }
+  return (
+    <svg className="preset-icon" viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
+      <defs>
+        <clipPath id={clip}>
+          <circle cx="24" cy="24" r="20" />
+        </clipPath>
+      </defs>
+      <circle className="preset-icon-dish" cx="24" cy="24" r="20" />
+      <g clipPath={`url(#${clip})`}>{pattern}</g>
+      <circle
+        cx="24"
+        cy="24"
+        r="20.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        opacity="0.45"
+      />
+    </svg>
+  );
+}
+
+/** The parts of the Markdown tree (hast) the preset gallery reads. */
+interface HastNode {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+}
+
+function textOf(node: HastNode): string {
+  return node.type === "text" ? (node.value ?? "") : (node.children ?? []).map(textOf).join("");
+}
+
+interface PresetItem {
+  id: string;
+  preset: Preset;
+  label: string;
+  /** The text after the preset link: what to look for. */
+  note: string;
+}
+
+/** A Markdown list in which every item starts with a preset link, or null. */
+function presetList(list: HastNode, experiment: Experiment): PresetItem[] | null {
+  const items = (list.children ?? []).filter((c) => c.type === "element" && c.tagName === "li");
+  if (items.length === 0) return null;
+  const out: PresetItem[] = [];
+  for (const li of items) {
+    let parts = (li.children ?? []).filter((c) => c.type !== "text" || c.value?.trim());
+    // Loose lists wrap each item's content in a paragraph.
+    const [only] = parts;
+    if (parts.length === 1 && only?.tagName === "p") parts = only.children ?? [];
+    const [link, ...rest] = parts;
+    if (link?.tagName !== "a") return null;
+    const href = String(link.properties?.href ?? "");
+    const id = href.startsWith(PRESET_PREFIX) ? href.slice(PRESET_PREFIX.length) : null;
+    const preset = id ? experiment.presets[id] : undefined;
+    if (!id || !preset) return null;
+    out.push({
+      id,
+      preset,
+      label: textOf(link).trim() || preset.label,
+      note: rest.map(textOf).join("").trim(),
+    });
+  }
+  return out;
+}
+
+/**
+ * Presets side by side as picture buttons. Applying one shows its settings and what
+ * to look for underneath.
+ */
+function PresetGallery({
+  experiment,
+  items,
+  control,
+}: {
+  experiment: Experiment;
+  items: PresetItem[];
+  control: LiveControlState;
+}) {
+  const noteId = useId();
+  const selected = items.find((item) => matchesPreset(control.values, item.preset)) ?? null;
+  return (
+    <div className="preset-gallery">
+      <div
+        className="preset-tiles"
+        style={{ gridTemplateColumns: `repeat(${Math.min(items.length, 4)}, minmax(0, 1fr))` }}
+      >
+        {items.map((item) => {
+          const isSelected = item === selected;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={`preset-tile ${isSelected ? "selected" : ""}`}
+              aria-pressed={isSelected}
+              aria-describedby={isSelected ? noteId : undefined}
+              title={presetSummary(experiment, item.preset)}
+              onClick={() => control.applyPreset(item.preset)}
+            >
+              <PresetIcon name={item.preset.icon} />
+              <span className="preset-tile-label">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {selected && (
+        <div className="preset-note" id={noteId}>
+          <div className="preset-note-head">
+            <strong>{selected.label}</strong>
+            <span className="preset-values">{presetSummary(experiment, selected.preset)}</span>
+          </div>
+          {selected.note && <p className="preset-note-text">{selected.note}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GuidePane({
   experiment,
   control,
@@ -384,6 +793,11 @@ export function GuidePane({
   control: LiveControlState;
 }) {
   const components: Components = {
+    ul({ node, children, ...props }) {
+      const items = node ? presetList(node as unknown as HastNode, experiment) : null;
+      if (items) return <PresetGallery experiment={experiment} items={items} control={control} />;
+      return <ul {...props}>{children}</ul>;
+    },
     a({ href, children }) {
       if (href?.startsWith(PRESET_PREFIX)) {
         const preset = experiment.presets[href.slice(PRESET_PREFIX.length)];

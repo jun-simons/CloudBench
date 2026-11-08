@@ -9,8 +9,14 @@
   --accent: #5cc8ff;
   --accent-ink: #04121b;
   --danger: #ff6b6b;
+  --danger-ink: #1b0606;
   --success: #4ade80;
   --warn: #fbbf24;
+  --thumb: #fff;
+  --thumb-border: transparent;
+  --toast-bg: #3a1d1d;
+  --tooltip-bg: #2b303b;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --radius: 14px;
   --gutter: 16px;
   --topbar-h: 56px;
@@ -22,6 +28,28 @@
   line-height: 1.45;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Light: a clean instrument look, neutral greys with one blue for interaction. */
+:root[data-theme="light"] {
+  --bg: #eceef1;
+  --surface: #ffffff;
+  --surface-2: #f3f4f6;
+  --surface-3: #dfe3e8;
+  --border: #d2d7de;
+  --text: #15191f;
+  --muted: #5b6574;
+  --accent: #0b63c4;
+  --accent-ink: #ffffff;
+  --danger: #c8372d;
+  --danger-ink: #ffffff;
+  --success: #1a7f37;
+  --warn: #a35c00;
+  --thumb: #ffffff;
+  --thumb-border: #a9b1bd;
+  --toast-bg: #fdeceb;
+  --tooltip-bg: #1f2530;
+  color-scheme: light;
 }
 
 * {
@@ -129,6 +157,24 @@ h2 {
   gap: 10px;
 }
 
+button.icon-button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--muted);
+}
+
+@media (hover: hover) {
+  button.icon-button:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+}
+
 .layout {
   max-width: 1280px;
   margin: 0 auto;
@@ -159,46 +205,6 @@ h2 {
 
 .pane-guide {
   grid-area: guide;
-}
-
-@media (min-width: 960px) {
-  /* Desktop: an app-like layout. The page does not scroll; each pane scrolls on its own,
-     so the camera and controls stay fully in view while reading the guide. */
-  .app {
-    display: flex;
-    flex-direction: column;
-    height: 100dvh;
-  }
-
-  .layout {
-    flex: 1;
-    min-height: 0;
-    width: 100%;
-    gap: 20px 24px;
-    padding-top: 24px;
-    padding-bottom: 0;
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas:
-      "title title"
-      "controls guide";
-  }
-
-  /* Cap the video height so the controls below it stay in view on laptop screens. */
-  .pane-controls .stream {
-    width: min(100%, calc(max(240px, 100dvh - 480px) * var(--ratio, 1.78)));
-    margin-inline: auto;
-  }
-
-  .pane {
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    /* Room for focus rings and the highlight glow inside the scroll area. */
-    margin: -4px;
-    padding: 4px 4px 24px;
-  }
 }
 
 /* ------------------------------------------------------------------- brand */
@@ -282,6 +288,21 @@ button.compact {
   white-space: nowrap;
 }
 
+button.danger {
+  background: var(--danger);
+  color: var(--danger-ink);
+}
+
+/* The vibrator's Start/Stop button: one width for both labels so the header does not shift. */
+button.power {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 80px;
+  padding: 0 12px;
+}
+
 button.link {
   min-height: auto;
   padding: 0;
@@ -327,10 +348,19 @@ button:focus-visible {
   align-items: center;
   gap: 10px;
   min-height: 56px;
-  padding: 8px 12px 8px 8px;
+  /* The right edge lines up with the card body's content. */
+  padding: 8px 16px 8px 8px;
+}
+
+/* Header actions sit at the right edge and never shrink; the badge gives way instead. */
+.card-actions {
+  display: flex;
+  flex: none;
+  margin-left: auto;
 }
 
 .card-toggle {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -382,8 +412,14 @@ button:focus-visible {
 }
 
 .card-header .badge {
+  min-width: 0;
   background: var(--surface-2);
   color: var(--text);
+}
+
+.badge-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .badge.muted-badge {
@@ -425,6 +461,11 @@ button:focus-visible {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* A stream that failed to load shows the placeholder, not a broken-image icon. */
+.stream img.failed {
+  visibility: hidden;
 }
 
 .stream-placeholder {
@@ -495,8 +536,18 @@ button:focus-visible {
 
 /* ---------------------------------------------------------------- vibrator */
 
-.vibrator-hint {
-  margin-top: -8px;
+.vibrator-warning {
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+
+.field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
 .field {
@@ -505,14 +556,8 @@ button:focus-visible {
   gap: 6px;
 }
 
-.field-description {
-  margin-top: -2px;
-  font-size: 0.8125rem;
-  line-height: 1.4;
-  color: var(--muted);
-}
-
 .field-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -534,49 +579,115 @@ button:focus-visible {
   line-height: 1;
 }
 
+/* The value next to a slider: looks like text, edits like a field. */
 .value {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
   min-width: 76px;
-  text-align: center;
   font-size: 1.0625rem;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+  cursor: text;
 }
 
-.switch {
-  position: relative;
-  width: 52px;
-  min-height: 32px;
-  height: 32px;
+input.value-input {
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 2px 4px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  /* 17px: above the 16px at which iOS Safari zooms into a focused field. */
+  font-size: inherit;
+  text-align: right;
+  color: var(--text);
+  transition:
+    border-color 120ms,
+    background-color 120ms;
+}
+
+@media (hover: hover) {
+  input.value-input:hover {
+    border-color: var(--border);
+  }
+}
+
+input.value-input:focus {
+  border-color: var(--accent);
+  background: var(--surface-2);
+  outline: none;
+}
+
+.value-unit {
+  font-size: 0.875em;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ----------------------------------------------------------------- infotip */
+
+/* The bubble is placed against the whole field row (see .field-header), so it lines up
+   with the field and never runs past the card or column edge. */
+.infotip {
+  display: inline-flex;
+}
+
+button.infotip-button {
+  display: grid;
+  place-items: center;
+  /* A 28px target around a 14px icon; the negative margin keeps the row height. */
+  width: 28px;
+  min-height: 28px;
+  margin: -7px -6px;
   padding: 0;
-  border-radius: 999px;
-  background: var(--surface-3);
-  border: 1px solid var(--border);
-  flex: none;
-}
-
-.switch-thumb {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 24px;
-  height: 24px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
-  transition: transform 160ms ease;
+  background: none;
+  color: var(--muted);
 }
 
-.switch.on {
-  background: var(--success);
-  border-color: transparent;
+@media (hover: hover) {
+  button.infotip-button:hover {
+    color: var(--text);
+  }
 }
 
-.switch.on .switch-thumb {
-  transform: translateX(20px);
+.infotip-bubble {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--tooltip-bg);
+  color: #f2f4f7;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.4;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 120ms,
+    visibility 120ms;
+  pointer-events: none;
 }
 
-.switch:active:not(:disabled) {
-  transform: none;
+.infotip.open .infotip-bubble,
+.infotip:focus-within .infotip-bubble {
+  visibility: visible;
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .infotip:hover .infotip-bubble {
+    visibility: visible;
+    opacity: 1;
+  }
 }
 
 .segmented {
@@ -636,9 +747,9 @@ input[type="range"]::-webkit-slider-thumb {
   height: 26px;
   margin-top: -10px;
   border-radius: 50%;
-  background: #fff;
-  border: none;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 45%);
+  background: var(--thumb);
+  border: 1px solid var(--thumb-border);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
 }
 
 input[type="range"]::-moz-range-track {
@@ -657,8 +768,8 @@ input[type="range"]::-moz-range-thumb {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #fff;
-  border: none;
+  background: var(--thumb);
+  border: 1px solid var(--thumb-border);
 }
 
 /* ------------------------------------------------------------------- guide */
@@ -756,6 +867,89 @@ input[type="range"]::-moz-range-thumb {
   font-variant-numeric: tabular-nums;
 }
 
+/* Presets side by side as picture buttons, with the chosen one's note underneath. */
+.preset-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 16px;
+}
+
+.preset-tiles {
+  display: grid;
+  gap: 8px;
+}
+
+button.preset-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 4px 8px;
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+@media (hover: hover) {
+  button.preset-tile:hover {
+    color: var(--text);
+    border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  }
+}
+
+button.preset-tile.selected {
+  color: var(--text);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+}
+
+.preset-icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.preset-tile.selected .preset-icon {
+  color: var(--accent);
+}
+
+.preset-icon-dish {
+  fill: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.preset-tile-label {
+  max-width: 100%;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.preset-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-left: 3px solid var(--accent);
+  background: var(--surface-2);
+}
+
+.preset-note-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.guide .preset-note .preset-note-text {
+  margin: 0;
+}
+
 /* ------------------------------------------------------------------- toast */
 
 .toast {
@@ -770,8 +964,448 @@ input[type="range"]::-moz-range-thumb {
   gap: 12px;
   padding: 12px 16px;
   border-radius: 12px;
-  background: #3a1d1d;
+  background: var(--toast-bg);
   border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
   font-size: 0.875rem;
   z-index: 20;
+}
+
+/* ================================================================= desktop */
+/* A workstation layout (App renders it at 960px and up): denser type and controls,
+   squarer panels, and a full-height workspace whose columns scroll on their own.
+   Everything here is scoped to .desktop so the mobile layout is untouched. */
+
+.app.desktop {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding-bottom: 0;
+}
+
+.desktop .topbar {
+  position: static;
+  flex: none;
+  justify-content: flex-start;
+  gap: 16px;
+  height: 48px;
+  padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.desktop .logo {
+  flex: none;
+  gap: 8px;
+  font-size: 0.9375rem;
+}
+
+.desktop .logo svg {
+  width: 24px;
+  height: 24px;
+}
+
+.topbar-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.topbar-title h1 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.topbar-title span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.8125rem;
+}
+
+.desktop .topbar-user {
+  flex: none;
+  gap: 8px;
+}
+
+.desktop button.icon-button {
+  width: 32px;
+  min-height: 32px;
+  border-radius: 6px;
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.workspace.wide {
+  grid-template-columns: 320px minmax(0, 1fr) minmax(320px, 380px);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  /* Room for focus rings inside the scroll area. */
+  margin: -3px;
+  padding: 3px;
+}
+
+.column-streams {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------------ panels */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.panel-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-header h2,
+.desktop .card-header h2 {
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.panel-header .badge {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.panel-header h2 {
+  flex: none;
+}
+
+/* Gives way first when a pane is narrow. */
+.panel-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 0.71875rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ----------------------------------------------------------------- streams */
+
+.stream-grid {
+  flex: 1;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.stream-grid.has-others {
+  grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.stream-others {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+
+.stream.fill {
+  flex: 1;
+  min-height: 0;
+  border-radius: 0;
+}
+
+.desktop .stream-badges {
+  top: 8px;
+  left: 8px;
+  right: 8px;
+}
+
+/* ---------------------------------------------------------- dense controls */
+
+.desktop button {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+
+.desktop button.compact {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 0.78125rem;
+}
+
+.desktop button.power {
+  min-width: 72px;
+}
+
+.desktop .card {
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.desktop .card.collapsible {
+  padding: 0;
+}
+
+.desktop .card-header {
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 12px 4px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.desktop .collapsible.closed .card-header {
+  border-bottom-color: transparent;
+}
+
+.desktop .card-toggle {
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 6px;
+  border-radius: 6px;
+}
+
+.desktop .card-body {
+  gap: 14px;
+  padding: 12px;
+}
+
+.desktop .badge {
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+}
+
+.desktop .label {
+  font-size: 0.78125rem;
+}
+
+.desktop .field {
+  gap: 2px;
+}
+
+.desktop .stepper {
+  gap: 2px;
+}
+
+.desktop .stepper button {
+  width: 26px;
+  min-height: 26px;
+  border-radius: 5px;
+  font-size: 0.9375rem;
+}
+
+.desktop .value {
+  min-width: 76px;
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.desktop input.value-input {
+  padding: 1px 3px;
+  border-radius: 4px;
+}
+
+.desktop input[type="range"] {
+  height: 22px;
+}
+
+.desktop input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+}
+
+.desktop input[type="range"]::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+}
+
+.desktop input[type="range"]::-moz-range-track,
+.desktop input[type="range"]::-moz-range-progress {
+  height: 4px;
+}
+
+.desktop input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+}
+
+.desktop .segmented {
+  gap: 4px;
+}
+
+.desktop .segmented button {
+  gap: 2px;
+  min-height: 42px;
+  padding: 4px;
+  border-radius: 6px;
+  font-size: 0.71875rem;
+}
+
+.desktop .vibrator-warning {
+  border-radius: 6px;
+  font-size: 0.78125rem;
+}
+
+.desktop .infotip-bubble {
+  font-size: 0.75rem;
+}
+
+/* ------------------------------------------------------------------ lease */
+
+.desktop .lease {
+  padding: 10px 12px;
+  gap: 10px;
+}
+
+.desktop .lease.stack {
+  gap: 10px;
+}
+
+.desktop .lease h2 {
+  font-size: 0.84375rem;
+}
+
+.desktop .lease .heading {
+  gap: 1px;
+}
+
+.desktop .lease .small {
+  font-size: 0.78125rem;
+}
+
+.desktop .timer {
+  font-family: var(--mono);
+}
+
+.desktop .queue-pos {
+  min-width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  font-size: 0.9375rem;
+}
+
+.desktop .status-dot.on {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 20%, transparent);
+}
+
+/* ------------------------------------------------------------------ guide */
+
+.desktop .guide {
+  padding: 14px 16px;
+  border-radius: 8px;
+  font-size: 0.84375rem;
+  line-height: 1.55;
+}
+
+.desktop .guide > :first-child {
+  margin-top: 0;
+}
+
+.desktop .guide h2 {
+  font-size: 0.875rem;
+  margin: 18px 0 6px;
+}
+
+.desktop .guide h3 {
+  font-size: 0.84375rem;
+  margin: 14px 0 6px;
+}
+
+.desktop .guide p,
+.desktop .guide ul,
+.desktop .guide ol {
+  margin-bottom: 10px;
+}
+
+.desktop .guide ul:has(> li > .preset) {
+  gap: 8px;
+}
+
+.desktop .guide li:has(> .preset) {
+  gap: 4px;
+}
+
+.desktop .preset {
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.desktop .preset-values {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+}
+
+.desktop .preset-gallery {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.desktop .preset-tiles {
+  gap: 6px;
+}
+
+.desktop button.preset-tile {
+  gap: 4px;
+  padding: 8px 2px 6px;
+  border-radius: 6px;
+}
+
+.desktop .preset-icon {
+  width: 38px;
+  height: 38px;
+}
+
+.desktop .preset-tile-label {
+  font-size: 0.71875rem;
+}
+
+.desktop .preset-note {
+  padding: 8px 10px;
+  border-radius: 6px;
 }
