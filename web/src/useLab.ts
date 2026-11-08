@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Experiment, type Lease, type Run, type Workbench } from "./api";
 
 export interface LabState {
+  /** Every experiment, for the experiment menu; empty until loaded. */
+  experiments: Experiment[];
+  /** The experiment whose slug is in the address, or null if none matches. */
   experiment: Experiment | null;
   workbench: Workbench | null;
   lease: Lease | null;
@@ -18,12 +21,13 @@ export const isRunActive = (run: Run | null): run is Run =>
   run !== null && !TERMINAL_RUN.has(run.state);
 
 /**
- * Loads the experiment, workbench, the user's lease and live tone, and keeps them
- * fresh from the gateway's event stream. On every (re)connect it refetches
- * everything, so events missed while the phone slept do no harm.
+ * Loads the experiment with the given slug, its workbench, the user's lease and live
+ * tone, and keeps them fresh from the gateway's event stream. On every (re)connect it
+ * refetches everything, so events missed while the phone slept do no harm.
  */
-export function useLab() {
+export function useLab(slug: string | null) {
   const [state, setState] = useState<LabState>({
+    experiments: [],
     experiment: null,
     workbench: null,
     lease: null,
@@ -33,6 +37,8 @@ export function useLab() {
   });
   const workbenchId = useRef<string | null>(null);
   const liveAction = useRef<string | null>(null);
+  // The slug refresh() loads; updated (and reloaded) by the effect below.
+  const slugRef = useRef(slug);
 
   const patch = useCallback((update: Partial<LabState>) => {
     setState((s) => ({ ...s, ...update }));
@@ -41,7 +47,7 @@ export function useLab() {
   const refresh = useCallback(async () => {
     try {
       const experiments = await api.experiments();
-      const experiment = experiments[0] ?? null;
+      const experiment = experiments.find((e) => e.slug === slugRef.current) ?? null;
       const wbId =
         experiment?.compatible_workbenches[0]?.workbench_id ?? workbenchId.current ?? "wb_faraday";
       workbenchId.current = wbId;
@@ -58,6 +64,7 @@ export function useLab() {
         ) ?? null;
       setState((s) => ({
         ...s,
+        experiments,
         experiment,
         workbench,
         // Keep showing a lease that just ended so the user sees why.
@@ -121,6 +128,13 @@ export function useLab() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [patch, refresh]);
+
+  // Another experiment was picked: load it (the event stream stays connected).
+  useEffect(() => {
+    if (slugRef.current === slug) return;
+    slugRef.current = slug;
+    void refresh();
+  }, [slug, refresh]);
 
   return { ...state, patch, refresh };
 }

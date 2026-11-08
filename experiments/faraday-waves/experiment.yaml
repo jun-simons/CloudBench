@@ -1,11 +1,11 @@
 # Faraday waves: a small water-filled petri dish is shaken up and down by the
 # vibration exciter; above a threshold amplitude, standing waves appear on the
 # surface at half the drive frequency. The camera looks down at the dish.
-#
-# Text marked TODO:text is placeholder copy, to be written in a later pass.
 apiVersion: cloudbench/v1
 kind: Experiment
 id: exp_faraday_waves
+# Web address: cloudbench.work/experiments/faraday-wave
+slug: faraday-wave
 version: 2
 title: "Faraday Waves Experiment"
 summary: "Create standing Faraday waves and observe different lattice patterns."

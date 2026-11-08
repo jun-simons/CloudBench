@@ -60,8 +60,10 @@ class AgentConfig(_Strict):
     workbench_id: str = "wb_faraday"
     # Prefer the CLOUDBENCH_AGENT_SECRET environment variable over putting this in a file.
     secret: str | None = None
-    name: str = "TODO:text - workbench name"
-    description: str = "TODO:text - one-line workbench description"
+    name: str = "Faraday Waves Bench"
+    description: str = (
+        "A dish of water on a subwoofer, filmed from above, for making Faraday waves."
+    )
     vibrator: VibratorConfig = Field(default_factory=VibratorConfig)
     camera: CameraConfig = Field(default_factory=CameraConfig)
     vision: VisionConfig = Field(default_factory=VisionConfig)

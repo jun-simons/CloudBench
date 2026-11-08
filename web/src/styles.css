@@ -123,11 +123,6 @@ h2 {
   padding: 16px;
 }
 
-.card.highlight {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
-}
-
 /* ------------------------------------------------------------------ layout */
 
 .app {
@@ -495,43 +490,190 @@ button:focus-visible {
 
 /* ------------------------------------------------------------------- lease */
 
-.lease h2 {
-  font-size: 1rem;
+/* The bench session: status chips, then the next step's button, all on one line. */
+.lease-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
-.queue-pos {
-  display: grid;
-  place-items: center;
-  min-width: 44px;
-  height: 44px;
-  padding: 0 8px;
-  border-radius: 12px;
-  background: var(--surface-2);
-  font-size: 1.125rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.status-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--muted);
+.lease-actions {
+  display: flex;
   flex: none;
+  gap: 8px;
+  margin-left: auto;
 }
 
-.status-dot.on {
-  background: var(--success);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 20%, transparent);
-}
-
-.timer {
+.lease-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lease-chip.on {
+  color: var(--text);
+}
+
+.lease-chip.warn {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
+}
+
+.lease-chip.turn {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+.lease-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.lease-chip.warn .lease-dot {
+  background: var(--warn);
+}
+
+/* An offer expires in seconds: make "Take control" impossible to miss. */
+button.attention {
+  animation: attention 1.4s ease-in-out infinite;
+}
+
+@keyframes attention {
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.attention {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+}
+
+/* ----------------------------------------------------------- experiment menu */
+
+.experiment-menu {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+button.experiment-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  margin: -4px -8px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+}
+
+@media (hover: hover) {
+  button.experiment-menu-trigger:hover {
+    background: var(--surface-2);
+  }
+}
+
+.experiment-menu-trigger[aria-expanded="true"] {
+  background: var(--surface-2);
+}
+
+.experiment-menu-chevron {
+  flex: none;
   color: var(--muted);
 }
 
-.timer.warn {
-  color: var(--warn);
+.experiment-menu-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: -8px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  min-width: 260px;
+  max-width: min(380px, calc(100vw - 2 * var(--gutter)));
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 22%);
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.experiment-menu-label {
+  padding: 6px 10px 4px;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.experiment-menu-item {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px 8px 6px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.experiment-menu-item:hover,
+.experiment-menu-item:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+}
+
+.experiment-menu-check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 20px;
+  color: var(--accent);
+}
+
+.experiment-menu-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.experiment-menu-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.experiment-menu-summary {
+  font-size: 0.78125rem;
+  color: var(--muted);
 }
 
 /* ---------------------------------------------------------------- vibrator */
@@ -1020,14 +1162,24 @@ button.preset-tile.selected {
 
 .topbar-title {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   flex: 1;
   min-width: 0;
   padding-left: 16px;
   border-left: 1px solid var(--border);
   white-space: nowrap;
+}
+
+.topbar-title h1 {
+  display: flex;
+  min-width: 0;
+}
+
+/* The title shortens before the summary disappears; the summary goes first. */
+.topbar-title .experiment-menu-title {
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .topbar-title h1 {
@@ -1036,7 +1188,7 @@ button.preset-tile.selected {
   letter-spacing: 0;
 }
 
-.topbar-title span {
+.topbar-title > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1310,40 +1462,23 @@ button.preset-tile.selected {
 
 /* ------------------------------------------------------------------ lease */
 
-.desktop .lease {
-  padding: 10px 12px;
-  gap: 10px;
+/* In the top bar, between the experiment and the user. */
+.desktop .lease-control {
+  flex: none;
 }
 
-.desktop .lease.stack {
-  gap: 10px;
+.desktop .lease-actions {
+  gap: 6px;
 }
 
-.desktop .lease h2 {
-  font-size: 0.84375rem;
+.desktop .lease-chip {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 0.75rem;
 }
 
-.desktop .lease .heading {
-  gap: 1px;
-}
-
-.desktop .lease .small {
-  font-size: 0.78125rem;
-}
-
-.desktop .timer {
+.desktop .lease-chip.timer {
   font-family: var(--mono);
-}
-
-.desktop .queue-pos {
-  min-width: 34px;
-  height: 34px;
-  border-radius: 6px;
-  font-size: 0.9375rem;
-}
-
-.desktop .status-dot.on {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 20%, transparent);
 }
 
 /* ------------------------------------------------------------------ guide */

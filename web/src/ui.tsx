@@ -3,7 +3,9 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { copy } from "./copy";
 import { usePersistentState } from "./useLab";
+import type { Experiment } from "./api";
 import type { Theme } from "./useDisplay";
+import { experimentPath } from "./useRoute";
 
 /** A card with a header that collapses its body; the collapsed state is remembered. */
 export function CollapsibleCard({
@@ -243,5 +245,133 @@ export function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () =>
         </svg>
       )}
     </button>
+  );
+}
+
+/**
+ * The current experiment's title, opening a menu of every experiment. Items are real
+ * links, so they also open in a new tab; a plain click switches without reloading.
+ */
+export function ExperimentMenu({
+  experiments,
+  current,
+  onSelect,
+}: {
+  experiments: Experiment[];
+  current: Experiment | null;
+  onSelect: (experiment: Experiment) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    // Focus the current experiment (or the first) so arrow keys work straight away.
+    const items = [...(ref.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [])];
+    (items.find((el) => el.getAttribute("aria-current")) ?? items[0])?.focus();
+    const onPointer = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    return () => document.removeEventListener("pointerdown", onPointer);
+  }, [open]);
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape" && open) {
+      setOpen(false);
+      ref.current?.querySelector<HTMLElement>("button")?.focus();
+      return;
+    }
+    if (!open || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+    e.preventDefault();
+    const items = [...(ref.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [])];
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const next = (at + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    items[next]?.focus();
+  };
+
+  return (
+    <div ref={ref} className="experiment-menu" onKeyDown={onKeyDown}>
+      <button
+        type="button"
+        className="experiment-menu-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        title={copy.experiments.choose}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="experiment-menu-title">{current?.title ?? copy.experiments.choose}</span>
+        <svg
+          className="experiment-menu-chevron"
+          viewBox="0 0 16 16"
+          width="14"
+          height="14"
+          aria-hidden="true"
+        >
+          <path
+            d="M4 6l4 4 4-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      {open && (
+        <div
+          className="experiment-menu-list"
+          id={menuId}
+          role="menu"
+          aria-label={copy.experiments.menu}
+        >
+          <div className="experiment-menu-label" aria-hidden="true">
+            {copy.experiments.menu}
+          </div>
+          {experiments.map((experiment) => {
+            const isCurrent = experiment.id === current?.id;
+            return (
+              <a
+                key={experiment.id}
+                role="menuitem"
+                className="experiment-menu-item"
+                href={experimentPath(experiment.slug)}
+                aria-current={isCurrent ? "page" : undefined}
+                onClick={(e) => {
+                  // Let modified clicks open a new tab or window as usual.
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                  e.preventDefault();
+                  setOpen(false);
+                  onSelect(experiment);
+                }}
+              >
+                <span className="experiment-menu-check" aria-hidden="true">
+                  {isCurrent && (
+                    <svg viewBox="0 0 16 16" width="14" height="14">
+                      <path
+                        d="M3.5 8.5l3 3 6-7"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.9"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </span>
+                <span className="experiment-menu-text">
+                  <span className="experiment-menu-name">{experiment.title}</span>
+                  {experiment.summary && (
+                    <span className="experiment-menu-summary">{experiment.summary}</span>
+                  )}
+                </span>
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

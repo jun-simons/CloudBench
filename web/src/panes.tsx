@@ -34,7 +34,34 @@ function presetSummary(experiment: Experiment, preset: Preset): string {
 
 // --------------------------------------------------------------------------- lease
 
-export function LeasePanel({
+function PeopleIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <circle cx="6" cy="5" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M1.8 13c.4-2.4 2.1-3.7 4.2-3.7s3.8 1.3 4.2 3.7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10.6 3a2.3 2.3 0 0 1 0 4.4M12.4 9.6c1 .6 1.6 1.8 1.8 3.4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * The bench session in one compact control: a status chip and the button for the next
+ * step (join, leave, take control, release). It sits in the top bar on desktop and in a
+ * slim row on phones.
+ */
+export function LeaseControl({
   workbench,
   lease,
   onJoin,
@@ -50,87 +77,131 @@ export function LeasePanel({
   busy: boolean;
 }) {
   const now = useNow();
+  const waiting = workbench?.queue_length ?? 0;
+  const people =
+    waiting > 0 ? (
+      <span
+        className="lease-chip"
+        title={copy.lease.waiting(waiting)}
+        aria-label={copy.lease.waiting(waiting)}
+      >
+        <PeopleIcon />
+        {waiting}
+      </span>
+    ) : null;
 
+  let status: ReactNode;
+  let actions: ReactNode;
+  let offered = false;
   if (workbench && workbench.status !== "online" && lease?.state !== "queued") {
-    const text = workbench.status === "maintenance" ? copy.bench.maintenance : copy.bench.offline;
-    return (
-      <section className="card lease">
-        <p className="muted">{text}</p>
-      </section>
+    const maintenance = workbench.status === "maintenance";
+    status = (
+      <span
+        className="lease-chip"
+        title={maintenance ? copy.bench.maintenance : copy.bench.offline}
+      >
+        {maintenance ? copy.lease.maintenance : copy.lease.offline}
+      </span>
     );
-  }
-
-  switch (lease?.state) {
-    case "active": {
-      const remaining = secondsUntil(lease.expires_at, now);
-      return (
-        <section className="card lease row">
-          <span className="status-dot on" aria-hidden="true" />
-          <div className="grow heading">
-            <h2>{copy.lease.active}</h2>
-            <p className={`small timer ${remaining <= 30 ? "warn" : ""}`}>
+    actions = (
+      <button type="button" className="compact primary" disabled>
+        {copy.lease.joinQueue}
+      </button>
+    );
+  } else {
+    switch (lease?.state) {
+      case "active": {
+        const remaining = secondsUntil(lease.expires_at, now);
+        status = (
+          <>
+            <span className={`lease-chip timer ${remaining <= 30 ? "warn" : "on"}`}>
+              <span className="lease-dot" aria-hidden="true" />
               {copy.lease.remaining(formatClock(remaining))}
-            </p>
-          </div>
-          <button className="ghost compact" onClick={onRelease} disabled={busy}>
+            </span>
+            {people}
+          </>
+        );
+        actions = (
+          <button type="button" className="compact ghost" onClick={onRelease} disabled={busy}>
             {copy.lease.release}
           </button>
-        </section>
-      );
-    }
-    case "queued":
-      return (
-        <section className="card lease row">
-          <div className="queue-pos">{copy.lease.position(lease.queue_position ?? 0)}</div>
-          <div className="grow heading">
-            <h2>{copy.lease.queued}</h2>
-            <p className="muted small">{copy.lease.queuedHint}</p>
-          </div>
-          <button className="ghost compact" onClick={onRelease} disabled={busy}>
+        );
+        break;
+      }
+      case "queued":
+        status = (
+          <span className="lease-chip on" title={copy.lease.waiting(waiting)}>
+            {copy.lease.position(
+              lease.queue_position ?? 0,
+              Math.max(waiting, lease.queue_position ?? 0),
+            )}
+          </span>
+        );
+        actions = (
+          <button type="button" className="compact ghost" onClick={onRelease} disabled={busy}>
             {copy.lease.leaveQueue}
           </button>
-        </section>
-      );
-    case "offered":
-      return (
-        <section className="card lease highlight stack">
-          <div className="heading">
-            <h2>{copy.lease.offered}</h2>
-            <p className="muted small">
-              {copy.lease.offeredHint(secondsUntil(lease.offer_expires_at, now))}
-            </p>
-          </div>
-          <div className="row">
-            <button className="primary grow" onClick={onAccept} disabled={busy}>
-              {copy.lease.start}
+        );
+        break;
+      case "offered":
+        offered = true;
+        status = (
+          <span className="lease-chip turn">
+            {copy.lease.yourTurn(secondsUntil(lease.offer_expires_at, now))}
+          </span>
+        );
+        actions = (
+          <>
+            <button
+              type="button"
+              className="compact primary attention"
+              onClick={onAccept}
+              disabled={busy}
+            >
+              {copy.lease.accept}
             </button>
-            <button className="ghost" onClick={onRelease} disabled={busy}>
+            <button type="button" className="compact ghost" onClick={onRelease} disabled={busy}>
               {copy.lease.decline}
             </button>
-          </div>
-        </section>
-      );
-    default: {
-      const ended =
-        lease && lease.state in copy.lease.ended
-          ? copy.lease.ended[lease.state as keyof typeof copy.lease.ended]
-          : null;
-      const status = workbench?.available
-        ? copy.lease.benchFree
-        : copy.lease.waiting(workbench?.queue_length ?? 0);
-      return (
-        <section className="card lease row">
-          <div className="grow heading">
-            <h2>{ended ?? copy.lease.idleHeading}</h2>
-            <p className="muted small">{status}</p>
-          </div>
-          <button className="primary compact" onClick={onJoin} disabled={busy || !workbench}>
+          </>
+        );
+        break;
+      default: {
+        const ended =
+          lease && lease.state in copy.lease.ended
+            ? copy.lease.ended[lease.state as keyof typeof copy.lease.ended]
+            : null;
+        status = (
+          <>
+            {ended && <span className="lease-chip">{ended}</span>}
+            {people}
+          </>
+        );
+        actions = (
+          <button
+            type="button"
+            className="compact primary"
+            onClick={onJoin}
+            disabled={busy || !workbench}
+          >
             {ended ? copy.lease.again : copy.lease.joinQueue}
           </button>
-        </section>
-      );
+        );
+      }
     }
   }
+
+  return (
+    <div
+      className={`lease-control ${offered ? "offered" : ""}`}
+      role="group"
+      aria-label={copy.lease.label}
+      aria-live="polite"
+    >
+      {status}
+      <div className="lease-actions">{actions}</div>
+    </div>
+  );
 }
 
 // --------------------------------------------------------------------------- camera
@@ -225,7 +296,7 @@ export function CameraCard({
       // The primary stream keeps the "camera" id so its remembered collapsed state carries over.
       id={!source || source.primary ? "camera" : `stream-${source.key}`}
       title={source && !source.primary ? source.title : copy.camera.title}
-      badge={<LiveBadge online={online} />}
+      badge={!source || source.primary ? <LiveBadge online={online} /> : undefined}
       defaultOpen={!source || source.primary}
     >
       <StreamView source={source} workbench={workbench} />
@@ -247,7 +318,7 @@ function StreamPane({
     <section className="panel stream-pane">
       <header className="panel-header">
         <h2>{source?.title ?? copy.camera.title}</h2>
-        <LiveBadge online={online} />
+        {(!source || source.primary) && <LiveBadge online={online} />}
         {meta && <span className="panel-meta">{meta}</span>}
       </header>
       <StreamView source={source} workbench={workbench} fill />
