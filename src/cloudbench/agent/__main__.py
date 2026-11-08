@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from cloudbench.agent.audio import AudioOutput, MockOutput, SimulatedSurface, SoundDeviceOutput
-from cloudbench.agent.camera import Camera, mock_source, opencv_source
+from cloudbench.agent.camera import Camera, ffmpeg_source, mock_source, opencv_source
 from cloudbench.agent.config import AgentConfig
 from cloudbench.agent.runtime import Agent
 from cloudbench.agent.tools import CameraTool, VibratorTool
@@ -23,11 +23,12 @@ def build_agent(config: AgentConfig, secret: str) -> Agent:
         if config.vibrator.driver == "sounddevice"
         else MockOutput(surface)
     )
-    source = (
-        opencv_source(config.camera)
-        if config.camera.driver == "opencv"
-        else mock_source(config.camera, surface)
-    )
+    if config.camera.driver == "opencv":
+        source = opencv_source(config.camera)
+    elif config.camera.driver == "ffmpeg":
+        source = ffmpeg_source(config.camera)
+    else:
+        source = mock_source(config.camera, surface)
     camera = Camera(config.camera, source)
     vibrator = VibratorTool(config.vibrator, output)
     camera_tool = CameraTool(config.camera, camera)

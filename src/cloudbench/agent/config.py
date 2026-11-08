@@ -27,8 +27,10 @@ class VibratorConfig(_Strict):
 
 class CameraConfig(_Strict):
     # "opencv" reads any camera the OS exposes (USB webcam, iPhone via Continuity
-    # Camera, capture card); "mock" draws synthetic frames.
-    driver: Literal["opencv", "mock"] = "mock"
+    # Camera, capture card); "ffmpeg" (macOS) does the same through ffmpeg/AVFoundation and
+    # also accepts a device name such as "iPhone Camera"; "mock" draws synthetic frames.
+    driver: Literal["opencv", "ffmpeg", "mock"] = "mock"
+    # opencv: device index. ffmpeg: AVFoundation index or a name substring.
     device: int | str = 0
     width: int = 1280
     height: int = 720
