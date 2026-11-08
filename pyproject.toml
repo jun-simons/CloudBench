@@ -1,0 +1,68 @@
+[project]
+name = "cloudbench"
+version = "0.1.0"
+description = "Cloud Laboratory: lease real lab hardware, run experiments, watch the physical results."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+gateway = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "aiosqlite>=0.20",
+    "python-multipart>=0.0.17",
+    "jsonschema>=4.23",
+]
+agent = [
+    "websockets>=13.1",
+    "httpx>=0.27",
+    "numpy>=1.26",
+    "opencv-python-headless>=4.10",
+    "sounddevice>=0.5",
+]
+
+[project.scripts]
+cloudbench-gateway = "cloudbench.gateway.__main__:main"
+cloudbench-agent = "cloudbench.agent.__main__:main"
+
+[dependency-groups]
+dev = [
+    "cloudbench[gateway,agent]",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-timeout>=2.3",
+    "httpx>=0.27",
+    "ruff>=0.8",
+    "pyright>=1.1.390",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cloudbench"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "RUF", "SIM"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+timeout = 60

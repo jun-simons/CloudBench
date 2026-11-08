@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# Gateway runtime data (SQLite database, uploaded files)
+data/
+
+# Web
+web/node_modules/
+web/dist/
+
+# Local config with secrets
+.env
+agent.local.yaml
