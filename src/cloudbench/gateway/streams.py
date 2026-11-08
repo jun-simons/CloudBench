@@ -86,7 +86,7 @@ class StreamHub:
 router = APIRouter()
 
 
-async def _check_access(
+async def check_stream_access(
     services: Services,
     principal: Principal | None,
     workbench_id: str,
@@ -108,7 +108,7 @@ async def _check_access(
             raise ApiError(403, "lease_required", "This stream requires an active lease")
 
 
-def _stream_descriptor(
+def stream_descriptor(
     services: Services, workbench_id: str, tool_name: str, stream_name: str
 ) -> StreamDescriptor:
     descriptor = services.agents.descriptor(workbench_id)
@@ -133,8 +133,8 @@ async def watch_stream(
     services: Annotated[Services, Depends(get_services)],
 ) -> StreamingResponse:
     """Live MJPEG stream. Render it with ``<img src=...>``."""
-    descriptor = _stream_descriptor(services, workbench_id, tool, stream)
-    await _check_access(services, principal, workbench_id, descriptor)
+    descriptor = stream_descriptor(services, workbench_id, tool, stream)
+    await check_stream_access(services, principal, workbench_id, descriptor)
     channel = services.streams.channel(workbench_id, tool, stream)
 
     async def body() -> AsyncIterator[bytes]:
@@ -161,8 +161,8 @@ async def latest_frame(
     services: Annotated[Services, Depends(get_services)],
 ) -> Response:
     """The most recent frame as a single JPEG (useful for AI agents and thumbnails)."""
-    descriptor = _stream_descriptor(services, workbench_id, tool, stream)
-    await _check_access(services, principal, workbench_id, descriptor)
+    descriptor = stream_descriptor(services, workbench_id, tool, stream)
+    await check_stream_access(services, principal, workbench_id, descriptor)
     frame = services.streams.channel(workbench_id, tool, stream).frame
     if frame is None:
         raise ApiError(503, "no_frame", "No frame received from the camera yet")

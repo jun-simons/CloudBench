@@ -20,6 +20,7 @@ from cloudbench.gateway.events import EventBus, Presence
 from cloudbench.gateway.experiments import ExperimentService
 from cloudbench.gateway.files import FileStore
 from cloudbench.gateway.leases import LeaseManager
+from cloudbench.gateway.mcp import build_mcp_app, build_mcp_server
 from cloudbench.gateway.runs import RunService
 from cloudbench.gateway.services import Services
 from cloudbench.gateway.streams import StreamHub
@@ -65,6 +66,8 @@ async def _tick_loop(services: Services) -> None:
 def create_app(settings: GatewaySettings | None = None) -> FastAPI:
     settings = settings or GatewaySettings()
     services = build_services(settings)
+    mcp_server = build_mcp_server(services)
+    mcp_app = build_mcp_app(mcp_server)
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -75,7 +78,8 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
         await services.experiments.load_directory(settings.experiments_dir)
         tick = asyncio.create_task(_tick_loop(services), name="gateway-tick")
         try:
-            yield
+            async with mcp_server.session_manager.run():
+                yield
         finally:
             tick.cancel()
             await asyncio.gather(tick, return_exceptions=True)
@@ -97,6 +101,8 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
 
     for module in (api, workbenches, files, streams, experiments, agents):
         app.include_router(module.router)
+    # MCP over Streamable HTTP at /mcp, for AI agents.
+    app.router.routes.extend(mcp_app.routes)
 
     if settings.web_dir is not None:
         _mount_web(app, settings.web_dir)

@@ -53,6 +53,19 @@ uv run python -m sounddevice   # list audio outputs
 CLOUDBENCH_AGENT_SECRET=... uv run cloudbench-agent --config agent.local.yaml
 ```
 
+## AI agents (MCP)
+
+The gateway serves an MCP endpoint over Streamable HTTP at `/mcp`.
+Get a token from `POST /v1/sessions` and configure your MCP client with the header `Authorization: Bearer <token>`, for example:
+
+```bash
+TOKEN=$(curl -s -X POST localhost:8000/v1/sessions -H 'content-type: application/json' \
+  -d '{"display_name": "My agent"}' | jq -r .token)
+claude mcp add --transport http cloudbench http://localhost:8000/mcp --header "Authorization: Bearer $TOKEN"
+```
+
+The tools cover discovery, leases, tone generation and upload, running actions and experiments, and `get_camera_frame` to see the result.
+
 ## Gateway configuration
 
 All settings are environment variables prefixed with `CLOUDBENCH_`; see `src/cloudbench/gateway/config.py`.

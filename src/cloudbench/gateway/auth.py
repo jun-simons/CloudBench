@@ -71,12 +71,8 @@ async def create_session(services: Services, display_name: str) -> SessionOut:
     return SessionOut(token=token, principal=principal_out(principal))
 
 
-async def optional_principal(
-    request: Request, services: Annotated[Services, Depends(get_services)]
-) -> Principal | None:
-    token = _extract_token(request)
-    if token is None:
-        return None
+async def principal_for_token(services: Services, token: str) -> Principal | None:
+    """Resolve a session token to its principal and record the activity for presence."""
     async with services.db.session() as s:
         row = await s.execute(
             select(Principal)
@@ -84,9 +80,20 @@ async def optional_principal(
             .where(SessionToken.token_hash == _hash_token(token))
         )
         principal = row.scalar_one_or_none()
+    if principal is not None:
+        services.presence.touch(principal.id)
+    return principal
+
+
+async def optional_principal(
+    request: Request, services: Annotated[Services, Depends(get_services)]
+) -> Principal | None:
+    token = _extract_token(request)
+    if token is None:
+        return None
+    principal = await principal_for_token(services, token)
     if principal is None:
         raise ApiError(401, "invalid_token", "Session token is invalid or expired")
-    services.presence.touch(principal.id)
     return principal
 
 
