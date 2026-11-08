@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import io
+import json
 import socket
 import wave
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -62,6 +63,41 @@ async def eventually(
 
 
 @dataclass
+class EventLog:
+    events: list[tuple[str, dict[str, Any]]]
+
+    def of_type(self, event_type: str) -> list[dict[str, Any]]:
+        return [data for t, data in self.events if t == event_type]
+
+
+@contextlib.asynccontextmanager
+async def listening(client: httpx.AsyncClient, token: str) -> AsyncIterator[EventLog]:
+    """Subscribe to /v1/events and collect events; returns once the stream is live."""
+    log = EventLog(events=[])
+    ready = asyncio.Event()
+
+    async def listen() -> None:
+        async with client.stream("GET", f"/v1/events?access_token={token}") as response:
+            assert response.headers["content-type"].startswith("text/event-stream")
+            event_type = None
+            async for line in response.aiter_lines():
+                if line == ": connected":
+                    ready.set()
+                elif line.startswith("event: "):
+                    event_type = line[7:]
+                elif line.startswith("data: ") and event_type:
+                    log.events.append((event_type, json.loads(line[6:])))
+
+    task = asyncio.create_task(listen())
+    try:
+        await asyncio.wait_for(ready.wait(), 10)
+        yield log
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@dataclass
 class Lab:
     url: str
     client: httpx.AsyncClient
@@ -69,6 +105,7 @@ class Lab:
     agent_task: asyncio.Task[None] | None
 
     async def guest(self, name: str = "Judge") -> httpx.AsyncClient:
+        """A client with a fresh guest session; its token is in the Authorization header."""
         r = await self.client.post("/v1/sessions", json={"display_name": name})
         assert r.status_code == 201, r.text
         token = r.json()["token"]

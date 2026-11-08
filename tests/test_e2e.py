@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
 from typing import Any
 
 import httpx
@@ -12,7 +10,7 @@ from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from cloudbench.protocol import AGENT_CONTROL_PATH
-from tests.conftest import WORKBENCH, Lab, eventually, make_wav
+from tests.conftest import WORKBENCH, Lab, eventually, listening, make_wav
 
 PLAY = f"/v1/workbenches/{WORKBENCH}/tools/vibrator/actions/play_waveform/runs"
 
@@ -331,21 +329,7 @@ async def test_admin_maintenance_revokes_and_blocks(lab: Lab) -> None:
 async def test_event_stream_pushes_lease_and_run_updates(lab: Lab) -> None:
     alice = await lab.guest()
     token = alice.headers["Authorization"].split()[1]
-    events: list[tuple[str, dict[str, Any]]] = []
-
-    async def listen() -> None:
-        async with lab.client.stream("GET", f"/v1/events?access_token={token}") as response:
-            assert response.headers["content-type"].startswith("text/event-stream")
-            event_type = None
-            async for line in response.aiter_lines():
-                if line.startswith("event: "):
-                    event_type = line[7:]
-                elif line.startswith("data: ") and event_type:
-                    events.append((event_type, json.loads(line[6:])))
-
-    listener = asyncio.create_task(listen())
-    try:
-        await asyncio.sleep(0.2)
+    async with listening(lab.client, token) as log:
         a = await lease(alice)
         file_id = await upload_wav(alice, duration_s=0.2)
         run = (
@@ -354,16 +338,13 @@ async def test_event_stream_pushes_lease_and_run_updates(lab: Lab) -> None:
 
         async def saw_success() -> bool:
             return any(
-                t == "run.updated" and d["id"] == run["id"] and d["state"] == "succeeded"
-                for t, d in events
+                d["id"] == run["id"] and d["state"] == "succeeded"
+                for d in log.of_type("run.updated")
             )
 
         await eventually(saw_success)
-        assert any(t == "lease.updated" and d["state"] == "active" for t, d in events)
-        assert any(t == "workbench.updated" for t, _ in events)
-    finally:
-        listener.cancel()
-        await asyncio.gather(listener, return_exceptions=True)
+        assert any(d["state"] == "active" for d in log.of_type("lease.updated"))
+        assert log.of_type("workbench.updated")
 
 
 async def test_mjpeg_stream_and_snapshot(lab: Lab) -> None:
@@ -464,20 +445,7 @@ async def test_cancelling_experiment_stops_the_vibrator(lab: Lab) -> None:
 async def test_experiment_progress_is_pushed_over_events(lab: Lab) -> None:
     alice = await lab.guest()
     token = alice.headers["Authorization"].split()[1]
-    events: list[dict[str, Any]] = []
-
-    async def listen() -> None:
-        async with lab.client.stream("GET", f"/v1/events?access_token={token}") as response:
-            event_type = None
-            async for line in response.aiter_lines():
-                if line.startswith("event: "):
-                    event_type = line[7:]
-                elif line.startswith("data: ") and event_type == "experiment_run.updated":
-                    events.append(json.loads(line[6:]))
-
-    listener = asyncio.create_task(listen())
-    try:
-        await asyncio.sleep(0.2)
+    async with listening(lab.client, token) as log:
         a = await lease(alice)
         xrun = (
             await alice.post(
@@ -489,11 +457,9 @@ async def test_experiment_progress_is_pushed_over_events(lab: Lab) -> None:
         # The UI draws a progress bar from the running step's started_at.
         async def step_started() -> bool:
             return any(
-                e["id"] == xrun["id"] and e["runs"] and e["runs"][0]["started_at"] for e in events
+                e["id"] == xrun["id"] and e["runs"] and e["runs"][0]["started_at"]
+                for e in log.of_type("experiment_run.updated")
             )
 
         await eventually(step_started)
         await alice.post(f"/v1/experiment-runs/{xrun['id']}/cancel")
-    finally:
-        listener.cancel()
-        await asyncio.gather(listener, return_exceptions=True)
