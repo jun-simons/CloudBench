@@ -36,6 +36,23 @@ class CameraConfig(_Strict):
     height: int = 720
     fps: float = 30
     jpeg_quality: int = Field(default=80, ge=10, le=100)
+    # Crop each frame onto the dish (found by colour). The stream keeps width x height.
+    auto_crop: bool = False
+    # Border above and below the dish, as a fraction of the dish diameter.
+    crop_margin: float = Field(default=0.08, ge=0, le=1)
+    # Look for the dish every N frames.
+    crop_detect_every: int = Field(default=15, ge=1)
+
+
+class VisionConfig(_Strict):
+    # Image-analysis actions on the camera tool (detect_points, fourier, delaunay, analyze,
+    # capture_reference, activity). They need the dish to be visible and red; see the README.
+    enabled: bool = True
+    # Inner diameter of the dish, used to convert pixels to millimetres.
+    cup_diameter_mm: float = Field(default=68.0, gt=0)
+    # Overlay streams on the camera tool (points, delaunay, spectrum), each analysed at most this
+    # many times a second. 0 disables them; they cost CPU on the workbench even with no viewers.
+    stream_fps: float = Field(default=0, ge=0, le=10)
 
 
 class AgentConfig(_Strict):
@@ -47,6 +64,7 @@ class AgentConfig(_Strict):
     description: str = "TODO:text - one-line workbench description"
     vibrator: VibratorConfig = Field(default_factory=VibratorConfig)
     camera: CameraConfig = Field(default_factory=CameraConfig)
+    vision: VisionConfig = Field(default_factory=VisionConfig)
 
     @classmethod
     def load(cls, path: Path | None) -> AgentConfig:

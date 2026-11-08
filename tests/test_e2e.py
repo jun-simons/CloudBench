@@ -59,6 +59,10 @@ async def test_workbench_registers_with_tools(lab: Lab) -> None:
     assert actions["set_tone"]["concurrent"] is True
     assert actions["play_tone"]["concurrent"] is False
     assert tools["camera"]["streams"][0]["name"] == "video"
+    camera_actions = {a["name"] for a in tools["camera"]["actions"]}
+    assert camera_actions == {
+        "detect_points", "fourier", "delaunay", "analyze", "capture_reference", "activity"
+    }  # fmt: skip
 
     r = await lab.client.get(f"/v1/workbenches/{WORKBENCH}/tools/vibrator")
     assert r.json()["type"] == "vibration-exciter"
@@ -194,6 +198,26 @@ async def test_play_waveform_run_succeeds(lab: Lab) -> None:
     assert [r["id"] for r in mine] == [run["id"]]
     files = (await alice.get("/v1/me/files")).json()
     assert [f["id"] for f in files] == [file_id]
+
+
+async def test_camera_analysis_action_runs_through_the_gateway(lab: Lab) -> None:
+    """The mock camera has no red dish, so the analysis reports that clearly."""
+    alice = await lab.guest()
+    l = await lease(alice)  # noqa: E741
+    base = f"/v1/workbenches/{WORKBENCH}/tools/camera/actions"
+
+    async def run(action: str, input: dict[str, Any]) -> dict[str, Any]:
+        r = await alice.post(f"{base}/{action}/runs", json={"lease_id": l["id"], "input": input})
+        assert r.status_code == 202, r.text
+        return await eventually(lambda: run_finished(alice, r.json()["id"]))
+
+    failed = await run("analyze", {})
+    assert failed["state"] == "failed"
+    assert failed["error"]["code"] == "no_dish"
+    bad = await alice.post(
+        f"{base}/fourier/runs", json={"lease_id": l["id"], "input": {"peaks": 99}}
+    )
+    assert bad.status_code == 422  # the gateway checks the input schema before the agent runs it
 
 
 async def test_run_requires_active_lease_and_valid_input(lab: Lab) -> None:

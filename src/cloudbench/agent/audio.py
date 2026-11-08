@@ -94,18 +94,25 @@ class AudioOutput(Protocol):
 
 
 class SoundDeviceOutput:
-    def __init__(self, device: str | int | None) -> None:
+    def __init__(self, device: str | int | None, max_gain: float = 1.0) -> None:
         import sounddevice  # imported lazily: needs PortAudio, absent on CI and servers
 
         self._sd = sounddevice
         self._device = device
+        # Last line of defense: whatever reaches this driver, no sample leaves above this.
+        self._max_gain = max_gain
         self._tone_stream: Any = None
+
+    def _channels(self) -> int:
+        """Drive both channels of a stereo output (mono would only reach the left one)."""
+        return (
+            2 if self._sd.query_devices(self._device, "output")["max_output_channels"] >= 2 else 1
+        )
 
     async def play(self, audio: Audio, cancel: asyncio.Event) -> float:
         started = time.monotonic()
-        samples = audio.samples
-        # Drive both channels of a stereo output (a mono buffer would only reach the left one).
-        if self._sd.query_devices(self._device, "output")["max_output_channels"] >= 2:
+        samples = np.clip(audio.samples, -self._max_gain, self._max_gain)
+        if self._channels() == 2:
             samples = np.column_stack([samples, samples])
         self._sd.play(samples, audio.sample_rate, device=self._device)
         try:
@@ -122,12 +129,14 @@ class SoundDeviceOutput:
     async def play_tone(
         self, synth: ToneSynth, done: asyncio.Event, max_duration_s: float
     ) -> float:
+        limit = self._max_gain
+
         def callback(outdata: np.ndarray, frames: int, _time: object, _status: object) -> None:
-            outdata[:, 0] = synth.render(frames)
+            outdata[:] = np.clip(synth.render(frames), -limit, limit)[:, None]
 
         stream = self._sd.OutputStream(
             samplerate=synth.sample_rate,
-            channels=1,
+            channels=self._channels(),
             dtype="float32",
             device=self._device,
             callback=callback,

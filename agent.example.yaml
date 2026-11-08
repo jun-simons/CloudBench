@@ -28,3 +28,11 @@ camera:
   height: 720
   fps: 30
   jpeg_quality: 80
+
+vision:
+  # Analysis actions on the camera tool (detect_points, fourier, delaunay, analyze, activity).
+  enabled: true
+  # Inner diameter of the dish, to convert pixels to millimetres.
+  cup_diameter_mm: 68
+  # Annotated streams (points, delaunay, spectrum) analysed at most this often. 0 = off.
+  stream_fps: 0
