@@ -43,8 +43,10 @@ export function useLiveControl(lab: LabState, onError: (message: string) => void
     [live, values],
   );
 
-  const canControl =
-    lease?.state === "active" && workbench?.status === "online" && tool !== null && live !== null;
+  const holdsLease = lease?.state === "active";
+  // tool is null when the bench does not provide what the experiment needs, e.g. its
+  // agent is an older version without the live actions.
+  const canControl = holdsLease && workbench?.status === "online" && tool !== null && live !== null;
   const on = isRunActive(liveRun);
   const [busy, setBusy] = useState(false);
 
@@ -103,7 +105,7 @@ export function useLiveControl(lab: LabState, onError: (message: string) => void
     setOverrides((v) => ({ ...v, ...preset.values }));
   }, []);
 
-  return { live, tool, values, canControl, on, busy, setOn, setValue, applyPreset };
+  return { live, tool, values, holdsLease, canControl, on, busy, setOn, setValue, applyPreset };
 }
 
 export type LiveControlState = ReturnType<typeof useLiveControl>;

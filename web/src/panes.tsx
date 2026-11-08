@@ -285,7 +285,13 @@ export function VibratorCard({
   const summary = live.parameters
     .map((name) => formatValue(experiment.parameters[name], values[name] ?? ""))
     .join(" · ");
-  const hint = on ? null : canControl ? copy.controls.off : copy.controls.needLease;
+  const hint = on
+    ? null
+    : canControl
+      ? copy.controls.off
+      : control.holdsLease && !control.tool
+        ? copy.controls.unsupported
+        : copy.controls.needLease;
 
   return (
     <CollapsibleCard

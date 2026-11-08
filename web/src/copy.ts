@@ -63,6 +63,8 @@ export const copy = {
     power: "Vibrator power",
     off: "TODO:text - hint: switch on to start shaking the dish",
     needLease: "TODO:text - hint: join the queue to control the vibrator; you can set it up now",
+    unsupported:
+      "This bench can't be controlled from here yet: its agent needs updating to the latest version.",
     increase: (name: string) => `Increase ${name}`,
     decrease: (name: string) => `Decrease ${name}`,
   },
