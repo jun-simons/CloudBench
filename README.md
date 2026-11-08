@@ -3,6 +3,7 @@
 A cloud laboratory: users and AI agents lease real lab hardware, run experiments on it, and watch the physical results live.
 
 The design lives in the [CloudBench API and Backend Design](https://claude.ai/artifact/Tm5Jt2RaFGNeN77xuKuZfh) doc.
+Conventions and gotchas for contributors (human or AI) are in `AGENTS.md`; the current state of work is in `HANDOFF.md`.
 
 ## Layout
 
