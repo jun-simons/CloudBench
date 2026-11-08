@@ -153,7 +153,10 @@ class VibratorTool(Tool):
                 f"playback of {total:.1f} s exceeds the {self._config.max_duration_s:g} s limit",
             )
 
-        samples = (np.tile(audio.samples, loop) * gain).astype(np.float32)
+        # Hard ceiling regardless of gain or file content: nothing leaves above max_gain.
+        samples = np.clip(
+            np.tile(audio.samples, loop) * gain, -self._config.max_gain, self._config.max_gain
+        ).astype(np.float32)
         played = await self._output.play(Audio(samples, audio.sample_rate), cancel)
         if cancel.is_set():
             raise asyncio.CancelledError

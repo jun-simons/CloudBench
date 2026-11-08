@@ -93,7 +93,11 @@ class SoundDeviceOutput:
 
     async def play(self, audio: Audio, cancel: asyncio.Event) -> float:
         started = time.monotonic()
-        self._sd.play(audio.samples, audio.sample_rate, device=self._device)
+        samples = audio.samples
+        # Drive both channels of a stereo output (a mono buffer would only reach the left one).
+        if self._sd.query_devices(self._device, "output")["max_output_channels"] >= 2:
+            samples = np.column_stack([samples, samples])
+        self._sd.play(samples, audio.sample_rate, device=self._device)
         try:
             deadline = started + audio.duration_s + 0.5
             while time.monotonic() < deadline and not cancel.is_set():

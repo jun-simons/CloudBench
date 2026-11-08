@@ -6,6 +6,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import re
+import subprocess
 import threading
 import time
 from collections.abc import AsyncIterator, Callable
@@ -51,6 +53,7 @@ class Camera:
         params = [int(cv2.IMWRITE_JPEG_QUALITY), self._config.jpeg_quality]
         period = 1.0 / self._config.fps
         while not self._stop.is_set():
+            read = None
             try:
                 read = self._open_source()
                 self.fault = None
@@ -75,6 +78,11 @@ class Camera:
                 self.fault = str(exc)
                 log.warning("Camera error: %s; retrying in 2 s", exc)
                 self._stop.wait(2)
+            finally:
+                # Sources that own a subprocess expose close() so it never outlives the loop.
+                closer = getattr(read, "close", None)
+                if closer is not None:
+                    closer()
 
     def _wait_frame(self, after: int, timeout: float) -> tuple[int, bytes | None]:
         with self._cond:
@@ -113,6 +121,83 @@ def opencv_source(config: CameraConfig) -> Callable[[], FrameSource]:
                 return None
             return frame
 
+        return read
+
+    return open_source
+
+
+def _list_avfoundation_video_devices() -> list[tuple[str, str]]:
+    """(index, name) of macOS video devices, as ffmpeg numbers them."""
+    out = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    ).stderr
+    if "AVFoundation video devices:" not in out:
+        raise RuntimeError("ffmpeg could not list AVFoundation devices (is ffmpeg installed?)")
+    video = out.split("AVFoundation video devices:")[1].split("AVFoundation audio devices:")[0]
+    return re.findall(r"\[(\d+)\] (.+)", video)
+
+
+def pick_avfoundation_device(device: int | str, devices: list[tuple[str, str]]) -> str:
+    """An int is an ffmpeg device index. A string is matched against names, case-insensitively;
+    "Desk View" cameras are skipped because they share a name prefix with the real camera."""
+    if isinstance(device, int):
+        return str(device)
+    wanted = device.lower()
+    for index, name in devices:
+        if wanted in name.lower() and "desk view" not in name.lower():
+            return index
+    raise RuntimeError(f"no video device matching {device!r}; found {[n for _, n in devices]}")
+
+
+def ffmpeg_source(config: CameraConfig) -> Callable[[], FrameSource]:
+    """macOS camera via ffmpeg/AVFoundation. Unlike OpenCV it selects the device by name
+    (so a Continuity Camera iPhone keeps working when device indexes shift) and honors the
+    requested resolution and frame rate."""
+    w, h = config.width, config.height
+    if w % 2 or h % 2:
+        raise ValueError("ffmpeg camera width and height must be even")
+    frame_bytes = w * h * 3 // 2  # NV12
+
+    def open_source() -> FrameSource:
+        index = pick_avfoundation_device(config.device, _list_avfoundation_video_devices())
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-f", "avfoundation", "-framerate", f"{config.fps:g}",
+            "-video_size", f"{w}x{h}", "-pixel_format", "nv12",
+            "-fflags", "nobuffer", "-i", index,
+            "-f", "rawvideo", "-pix_fmt", "nv12", "-fps_mode", "passthrough", "-",
+        ]  # fmt: skip
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=frame_bytes * 2
+        )
+        log.info("Camera %r (avfoundation device %s) opened at %dx%d @ %g fps",
+                 config.device, index, w, h, config.fps)  # fmt: skip
+
+        def read() -> np.ndarray | None:
+            assert proc.stdout is not None
+            buf = proc.stdout.read(frame_bytes)
+            if len(buf) < frame_bytes:
+                reason = ""
+                if proc.stderr is not None:
+                    proc.kill()
+                    reason = proc.stderr.read().decode(errors="replace").strip()[-300:]
+                log.warning("ffmpeg camera stopped: %s", reason or "no output")
+                return None
+            yuv = np.frombuffer(buf, np.uint8).reshape(h * 3 // 2, w)
+            return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_NV12)
+
+        def close() -> None:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+
+        read.close = close  # type: ignore[attr-defined]
         return read
 
     return open_source
