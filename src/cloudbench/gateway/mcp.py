@@ -29,8 +29,9 @@ from cloudbench.gateway.experiments import ExperimentRunCreate
 from cloudbench.gateway.files import file_out
 from cloudbench.gateway.services import Services
 from cloudbench.gateway.streams import check_stream_access, stream_descriptor
-from cloudbench.gateway.waveforms import SineSpec, sine_wav
+from cloudbench.gateway.waveforms import ToneSpec, tone_wav
 from cloudbench.gateway.workbenches import workbench_summary
+from cloudbench.signals import Shape
 
 INSTRUCTIONS = """\
 CloudBench lets you run experiments on real lab hardware and observe the physical result.
@@ -40,7 +41,9 @@ Typical flow:
 2. request_lease on a workbench. If the lease is "queued", poll get_lease; when it becomes
    "offered", call accept_lease. Only an "active" lease can run actions.
 3. Either run_experiment (a ready-made recipe from list_experiments) or run_action directly.
-   Actions that take audio need a file ID: make one with create_tone or upload_wav.
+   For a live tone use the vibrator's play_tone (with a short duration_s, or stop it with the
+   stop action); set_tone adjusts it while it plays. Clip actions take a file ID: make one
+   with create_tone or upload_wav.
 4. get_camera_frame to look at the result.
 5. release_lease when done so the next person can use the bench.
 
@@ -137,16 +140,24 @@ def build_mcp_server(services: Services) -> MCPServer:
 
     @server.tool()
     async def create_tone(
-        ctx: Context, frequency_hz: float, duration_s: float, amplitude: float = 1.0
+        ctx: Context,
+        frequency_hz: float,
+        duration_s: float,
+        amplitude: float = 1.0,
+        shape: Shape = Shape.SINE,
     ) -> dict[str, Any]:
-        """Generate a mono sine-wave WAV file in your library and return it (use its "id")."""
+        """Generate a mono WAV tone (sine, square, triangle or sawtooth) in your library and
+        return it (use its "id"). For live, adjustable tones use run_action with play_tone."""
         principal = await caller(ctx)
         try:
-            spec = SineSpec(frequency_hz=frequency_hz, duration_s=duration_s, amplitude=amplitude)
+            spec = ToneSpec(
+                frequency_hz=frequency_hz, duration_s=duration_s, amplitude=amplitude, shape=shape
+            )
         except ValidationError as exc:
             raise ToolError(f"invalid_input: {exc}") from exc
-        data = await asyncio.to_thread(sine_wav, spec)
-        f = await services.files.save_bytes(principal.id, f"tone-{frequency_hz:g}hz.wav", data)
+        data = await asyncio.to_thread(tone_wav, spec)
+        filename = f"tone-{shape.value}-{frequency_hz:g}hz.wav"
+        f = await services.files.save_bytes(principal.id, filename, data)
         return file_out(f).model_dump(mode="json")
 
     @server.tool()

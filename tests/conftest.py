@@ -7,6 +7,7 @@ import asyncio
 import contextlib
 import io
 import json
+import shutil
 import socket
 import wave
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -140,11 +141,15 @@ class Lab:
 @contextlib.asynccontextmanager
 async def running_gateway(tmp_path: Path, **overrides: Any) -> AsyncIterator[str]:
     port = free_port()
+    # The real experiments plus test-only fixtures.
+    experiments = tmp_path / "experiments"
+    shutil.copytree(REPO / "experiments", experiments)
+    shutil.copytree(REPO / "tests" / "fixtures" / "experiments", experiments, dirs_exist_ok=True)
     values: dict[str, Any] = {
         "host": "127.0.0.1",
         "port": port,
         "data_dir": tmp_path / "data",
-        "experiments_dir": REPO / "experiments",
+        "experiments_dir": experiments,
         "agent_secrets": {WORKBENCH: SECRET},
         "admin_token": "test-admin-token",
         "tick_interval_s": 0.05,

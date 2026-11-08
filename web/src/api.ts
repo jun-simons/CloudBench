@@ -67,6 +67,8 @@ export interface ErrorInfo {
 
 export interface Run {
   id: string;
+  workbench_id: string;
+  lease_id: string;
   tool: string;
   action: string;
   state: RunState;
@@ -88,6 +90,26 @@ export interface ParameterSchema {
   enum?: string[];
   "x-unit"?: string;
   "x-step"?: number;
+  /** "percent": a 0..1 value shown as 0..100 %. */
+  "x-format"?: "percent";
+}
+
+export type ParameterValue = number | string;
+export type ParameterValues = Record<string, ParameterValue>;
+
+export interface Preset {
+  label: string;
+  description: string;
+  values: ParameterValues;
+}
+
+/** Which tool role and actions the live controls drive (see the experiment file). */
+export interface LiveControl {
+  role: string;
+  parameters: string[];
+  start: string;
+  update: string;
+  stop: string;
 }
 
 export type Step = { show: string } | { run: string; input: Record<string, unknown> };
@@ -101,6 +123,8 @@ export interface Experiment {
   estimated_duration_s: number | null;
   parameters: Record<string, ParameterSchema>;
   procedure: Step[];
+  presets: Record<string, Preset>;
+  live: LiveControl | null;
   compatible_workbenches: { workbench_id: string; bindings: Record<string, string> }[];
 }
 
@@ -208,6 +232,19 @@ export class Api {
     this.request<ExperimentRun>("POST", `/v1/experiment-runs/${id}/cancel`);
   myExperimentRuns = () => this.request<ExperimentRun[]>("GET", "/v1/me/experiment-runs");
   myOpenLeases = () => this.request<Lease[]>("GET", "/v1/me/leases");
+  myRuns = () => this.request<Run[]>("GET", "/v1/me/runs");
+  runAction = (
+    workbenchId: string,
+    tool: string,
+    action: string,
+    leaseId: string,
+    input: Record<string, unknown>,
+  ) =>
+    this.request<Run>(
+      "POST",
+      `/v1/workbenches/${workbenchId}/tools/${tool}/actions/${action}/runs`,
+      { lease_id: leaseId, input },
+    );
 }
 
 export const api = new Api();

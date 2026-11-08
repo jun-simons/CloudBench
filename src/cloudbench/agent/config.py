@@ -17,8 +17,11 @@ class VibratorConfig(_Strict):
     driver: Literal["sounddevice", "mock"] = "mock"
     # sounddevice output device name or index; None uses the system default.
     device: str | int | None = None
-    max_duration_s: float = 60
+    max_duration_s: float = 180
     max_gain: float = Field(default=1.0, gt=0, le=1)
+    # Frequency range the exciter may be driven at.
+    min_frequency_hz: float = Field(default=1, gt=0)
+    max_frequency_hz: float = Field(default=2000, gt=0)
     sample_rates_hz: list[int] = Field(default_factory=lambda: [44_100, 48_000])
 
 

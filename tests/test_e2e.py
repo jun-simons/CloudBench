@@ -54,8 +54,10 @@ async def test_workbench_registers_with_tools(lab: Lab) -> None:
     assert bench["available"] is True
     tools = {t["name"]: t for t in bench["tools"]}
     assert set(tools) == {"vibrator", "camera"}
-    actions = {a["name"] for a in tools["vibrator"]["actions"]}
-    assert actions == {"play_waveform", "stop"}
+    actions = {a["name"]: a for a in tools["vibrator"]["actions"]}
+    assert set(actions) == {"play_tone", "set_tone", "stop", "play_waveform"}
+    assert actions["set_tone"]["concurrent"] is True
+    assert actions["play_tone"]["concurrent"] is False
     assert tools["camera"]["streams"][0]["name"] == "video"
 
     r = await lab.client.get(f"/v1/workbenches/{WORKBENCH}/tools/vibrator")
@@ -380,16 +382,49 @@ async def test_faraday_experiment_runs_end_to_end(lab: Lab) -> None:
     assert exp["compatible_workbenches"] == [
         {"workbench_id": WORKBENCH, "bindings": {"exciter": "vibrator", "observer": "camera"}}
     ]
+    assert exp["live"]["start"] == "play_tone"
+    assert set(exp["presets"]) >= {"gentle", "chaos"}
 
     alice = await lab.guest()
     a = await lease(alice)
     r = await alice.post(
         "/v1/experiments/exp_faraday_waves/runs",
-        json={"lease_id": a["id"], "parameters": {"frequency_hz": 50, "duration_s": 5}},
+        json={
+            "lease_id": a["id"],
+            "parameters": {"frequency_hz": 50, "shape": "triangle", "duration_s": 1},
+        },
     )
     assert r.status_code == 202, r.text
     xrun = r.json()
-    assert xrun["parameter_values"] == {"frequency_hz": 50, "gain": 0.4, "duration_s": 5}
+    assert xrun["parameter_values"] == {
+        "frequency_hz": 50,
+        "amplitude": 0.3,
+        "shape": "triangle",
+        "duration_s": 1,
+    }
+
+    async def finished() -> dict[str, Any] | None:
+        x = (await alice.get(f"/v1/experiment-runs/{xrun['id']}")).json()
+        return x if x["state"] in ("succeeded", "failed", "cancelled") else None
+
+    done = await eventually(finished, within=15)
+    assert done["state"] == "succeeded", done
+    [run] = done["runs"]
+    assert run["action"] == "play_tone"
+    assert run["output"]["shape"] == "triangle"
+    assert run["output"]["played_s"] == pytest.approx(1, abs=0.3)
+    assert [x["id"] for x in (await alice.get("/v1/me/experiment-runs")).json()] == [xrun["id"]]
+
+
+async def test_generated_waveform_experiment(lab: Lab) -> None:
+    alice = await lab.guest()
+    a = await lease(alice)
+    xrun = (
+        await alice.post(
+            "/v1/experiments/exp_tone_clip/runs",
+            json={"lease_id": a["id"], "parameters": {"frequency_hz": 50, "shape": "square"}},
+        )
+    ).json()
 
     async def finished() -> dict[str, Any] | None:
         x = (await alice.get(f"/v1/experiment-runs/{xrun['id']}")).json()
@@ -400,13 +435,11 @@ async def test_faraday_experiment_runs_end_to_end(lab: Lab) -> None:
     [run] = done["runs"]
     assert run["action"] == "play_waveform"
     assert run["input"]["gain"] == 0.4
-    assert run["output"]["played_s"] == pytest.approx(5, abs=0.3)
 
     # The generated waveform landed in the user's library.
     [generated] = (await alice.get("/v1/me/files")).json()
     assert generated["id"] == run["input"]["audio"]
-    assert generated["filename"].endswith("50hz.wav")
-    assert [x["id"] for x in (await alice.get("/v1/me/experiment-runs")).json()] == [xrun["id"]]
+    assert generated["filename"] == "exp_tone_clip-drive-square-50hz.wav"
 
 
 async def test_experiment_rejects_out_of_range_parameters(lab: Lab) -> None:
@@ -463,3 +496,77 @@ async def test_experiment_progress_is_pushed_over_events(lab: Lab) -> None:
 
         await eventually(step_started)
         await alice.post(f"/v1/experiment-runs/{xrun['id']}/cancel")
+
+
+# --------------------------------------------------------------------------- #
+# Live tone control
+# --------------------------------------------------------------------------- #
+
+TONE = f"/v1/workbenches/{WORKBENCH}/tools/vibrator/actions"
+
+
+async def test_live_tone_can_be_adjusted_and_stopped(lab: Lab) -> None:
+    alice = await lab.guest()
+    a = await lease(alice)
+
+    r = await alice.post(
+        f"{TONE}/set_tone/runs", json={"lease_id": a["id"], "input": {"amplitude": 0.2}}
+    )
+    not_playing = await eventually(lambda: run_finished(alice, r.json()["id"]))
+    assert not_playing["state"] == "failed"
+    assert not_playing["error"]["code"] == "not_playing"
+
+    tone = (
+        await alice.post(
+            f"{TONE}/play_tone/runs",
+            json={"lease_id": a["id"], "input": {"frequency_hz": 40, "amplitude": 0.3}},
+        )
+    ).json()
+    assert tone["input"]["shape"] == "sine"
+
+    async def running() -> bool:
+        return (await get_run(alice, tone["id"]))["state"] == "running"
+
+    await eventually(running)
+
+    # Adjusting is allowed while the tone plays; starting a second tone or a clip is not.
+    r = await alice.post(
+        f"{TONE}/set_tone/runs",
+        json={"lease_id": a["id"], "input": {"frequency_hz": 62.5, "shape": "square"}},
+    )
+    assert r.status_code == 202, r.text
+    adjusted = await eventually(lambda: run_finished(alice, r.json()["id"]))
+    assert adjusted["state"] == "succeeded", adjusted
+    assert adjusted["output"] == {"shape": "square", "frequency_hz": 62.5, "amplitude": 0.3}
+
+    r = await alice.post(
+        f"{TONE}/play_tone/runs",
+        json={"lease_id": a["id"], "input": {"frequency_hz": 40, "amplitude": 0.3}},
+    )
+    assert r.status_code == 409
+    assert r.json()["error"]["code"] == "tool_busy"
+
+    r = await alice.post(f"{TONE}/stop/runs", json={"lease_id": a["id"]})
+    assert r.status_code == 202
+    done = await eventually(lambda: run_finished(alice, tone["id"]))
+    assert done["state"] == "succeeded"
+    assert done["output"]["frequency_hz"] == 62.5
+
+
+async def test_releasing_lease_stops_live_tone(lab: Lab) -> None:
+    alice = await lab.guest()
+    a = await lease(alice)
+    tone = (
+        await alice.post(
+            f"{TONE}/play_tone/runs",
+            json={"lease_id": a["id"], "input": {"frequency_hz": 40, "amplitude": 0.3}},
+        )
+    ).json()
+
+    async def running() -> bool:
+        return (await get_run(alice, tone["id"]))["state"] == "running"
+
+    await eventually(running)
+    await alice.delete(f"/v1/leases/{a['id']}")
+    done = await eventually(lambda: run_finished(alice, tone["id"]))
+    assert done["state"] == "cancelled"

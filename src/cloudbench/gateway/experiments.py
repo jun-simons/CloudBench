@@ -29,7 +29,7 @@ from cloudbench.gateway.errors import ApiError, not_found
 from cloudbench.gateway.runs import RunOut, run_out
 from cloudbench.gateway.services import Services, get_services
 from cloudbench.gateway.util import new_id, utcnow
-from cloudbench.gateway.waveforms import SineSpec, sine_wav
+from cloudbench.gateway.waveforms import ToneSpec, tone_wav
 from cloudbench.protocol import ErrorInfo, RunState, WorkbenchDescriptor
 
 log = logging.getLogger(__name__)
@@ -82,6 +82,25 @@ class RunStep(_Strict):
 Step = ShowStep | RunStep
 
 
+class Preset(_Strict):
+    """A named set of parameter values worth trying; notes link to it as ``preset:<id>``."""
+
+    label: str
+    description: str = ""
+    values: dict[str, Any]
+
+
+class LiveControl(_Strict):
+    """Interactive control of one tool: clients start, adjust and stop it with these actions,
+    passing the listed parameters as action input under the same names."""
+
+    role: str
+    parameters: list[str]
+    start: str
+    update: str
+    stop: str
+
+
 class ExperimentDefinition(_Strict):
     apiVersion: Literal["cloudbench/v1"]
     kind: Literal["Experiment"]
@@ -95,6 +114,9 @@ class ExperimentDefinition(_Strict):
     parameters: dict[str, dict[str, Any]] = Field(default_factory=dict)
     assets: dict[str, Asset] = Field(default_factory=dict)
     procedure: list[Step]
+    presets: dict[str, Preset] = Field(default_factory=dict)
+    live: LiveControl | None = None
+    # Markdown. A link to "preset:<id>" renders as a button that applies that preset.
     notes: str = ""
 
     @property
@@ -120,6 +142,26 @@ class ExperimentDefinition(_Strict):
             if isinstance(step, RunStep):
                 for value in step.input.values():
                     self._check_expr(value)
+        validator = Draft202012Validator(self.parameters_schema)
+        for preset_id, preset in self.presets.items():
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,60}", preset_id):
+                raise ValueError(
+                    f"preset id {preset_id!r} must be lowercase letters, digits, - or _"
+                )
+            if error := next(validator.iter_errors(preset.values), None):
+                raise ValueError(f"preset {preset_id!r}: {error.message}")
+        for preset_id in re.findall(r"\(preset:([^)\s]+)\)", self.notes):
+            if preset_id not in self.presets:
+                raise ValueError(f"notes link to unknown preset {preset_id!r}")
+        if (live := self.live) is not None:
+            if live.role not in roles:
+                raise ValueError(f"live control refers to unknown role {live.role!r}")
+            for action in (live.start, live.update, live.stop):
+                if action not in roles[live.role].actions:
+                    raise ValueError(f"live action {action!r} must be listed for {live.role!r}")
+            for name in live.parameters:
+                if name not in self.parameters:
+                    raise ValueError(f"live control refers to unknown parameter {name!r}")
         for asset in self.assets.values():
             if isinstance(asset, GeneratedAsset):
                 for value in asset.generate.values():
@@ -428,11 +470,11 @@ class ExperimentService:
     ) -> str:
         spec_values = {k: resolve(v, params, {}) for k, v in asset.generate.items()}
         try:
-            spec = SineSpec.model_validate(spec_values)
+            spec = ToneSpec.model_validate(spec_values)
         except ValidationError as exc:
             raise ApiError(422, "invalid_parameters", f"Cannot generate {name}: {exc}") from exc
-        data = await asyncio.to_thread(sine_wav, spec)
-        filename = f"{definition.id}-{name}-{spec.frequency_hz:g}hz.wav"
+        data = await asyncio.to_thread(tone_wav, spec)
+        filename = f"{definition.id}-{name}-{spec.shape.value}-{spec.frequency_hz:g}hz.wav"
         return (await self.s.files.save_bytes(principal.id, filename, data)).id
 
     async def _set_state(
