@@ -1,32 +1,38 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type Experiment, type ExperimentRun, type Lease, type Workbench } from "./api";
+import { api, type Experiment, type Lease, type Run, type Workbench } from "./api";
 
 export interface LabState {
   experiment: Experiment | null;
   workbench: Workbench | null;
   lease: Lease | null;
-  experimentRun: ExperimentRun | null;
+  /** The user's live tone run (the experiment's live.start action), while it lasts. */
+  liveRun: Run | null;
   connected: boolean;
   error: string | null;
 }
 
 const TERMINAL_LEASE = new Set(["released", "expired", "revoked"]);
+const TERMINAL_RUN = new Set(["succeeded", "failed", "cancelled"]);
+
+export const isRunActive = (run: Run | null): run is Run =>
+  run !== null && !TERMINAL_RUN.has(run.state);
 
 /**
- * Loads the experiment, workbench, the user's lease and latest experiment run,
- * and keeps them fresh from the gateway's event stream. On every (re)connect it
- * refetches everything, so missed events while the phone slept do no harm.
+ * Loads the experiment, workbench, the user's lease and live tone, and keeps them
+ * fresh from the gateway's event stream. On every (re)connect it refetches
+ * everything, so events missed while the phone slept do no harm.
  */
-export function useLab(enabled: boolean) {
+export function useLab() {
   const [state, setState] = useState<LabState>({
     experiment: null,
     workbench: null,
     lease: null,
-    experimentRun: null,
+    liveRun: null,
     connected: false,
     error: null,
   });
   const workbenchId = useRef<string | null>(null);
+  const liveAction = useRef<string | null>(null);
 
   const patch = useCallback((update: Partial<LabState>) => {
     setState((s) => ({ ...s, ...update }));
@@ -39,19 +45,24 @@ export function useLab(enabled: boolean) {
       const wbId =
         experiment?.compatible_workbenches[0]?.workbench_id ?? workbenchId.current ?? "wb_faraday";
       workbenchId.current = wbId;
+      liveAction.current = experiment?.live?.start ?? null;
       const [workbench, leases, runs] = await Promise.all([
         api.workbench(wbId).catch(() => null),
         api.myOpenLeases(),
-        api.myExperimentRuns(),
+        api.myRuns(),
       ]);
       const lease = leases.find((l) => l.workbench_id === wbId) ?? null;
+      const liveRun =
+        runs.find(
+          (r) => r.lease_id === lease?.id && r.action === liveAction.current && isRunActive(r),
+        ) ?? null;
       setState((s) => ({
         ...s,
         experiment,
         workbench,
         // Keep showing a lease that just ended so the user sees why.
         lease: lease ?? (s.lease && TERMINAL_LEASE.has(s.lease.state) ? s.lease : null),
-        experimentRun: lease ? (runs.find((r) => r.lease_id === lease.id) ?? null) : null,
+        liveRun,
         error: null,
       }));
     } catch (e) {
@@ -60,7 +71,6 @@ export function useLab(enabled: boolean) {
   }, [patch]);
 
   useEffect(() => {
-    if (!enabled) return;
     let source: EventSource | null = null;
     let retry: number | undefined;
 
@@ -84,16 +94,18 @@ export function useLab(enabled: boolean) {
       });
       source.addEventListener("lease.updated", (e) => {
         const lease = JSON.parse((e as MessageEvent).data) as Lease;
-        if (lease.workbench_id !== workbenchId.current) return;
-        setState((s) => ({
-          ...s,
-          lease,
-          experimentRun: s.experimentRun?.lease_id === lease.id ? s.experimentRun : null,
-        }));
+        if (lease.workbench_id === workbenchId.current) patch({ lease });
       });
-      source.addEventListener("experiment_run.updated", (e) => {
-        const run = JSON.parse((e as MessageEvent).data) as ExperimentRun;
-        setState((s) => (s.lease?.id === run.lease_id ? { ...s, experimentRun: run } : s));
+      source.addEventListener("run.updated", (e) => {
+        const run = JSON.parse((e as MessageEvent).data) as Run;
+        if (run.action !== liveAction.current) return;
+        setState((s) => {
+          // Track the newest live run; ignore stale updates for older ones.
+          if (s.liveRun && s.liveRun.id !== run.id && run.created_at < s.liveRun.created_at) {
+            return s;
+          }
+          return { ...s, liveRun: run };
+        });
       });
     };
 
@@ -108,9 +120,9 @@ export function useLab(enabled: boolean) {
       window.clearTimeout(retry);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [enabled, patch, refresh]);
+  }, [patch, refresh]);
 
-  return { ...state, setLease: (lease: Lease | null) => patch({ lease }), patch, refresh };
+  return { ...state, patch, refresh };
 }
 
 /** Current time, re-rendering every `intervalMs` (for countdowns). */
@@ -132,4 +144,28 @@ export function formatClock(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/** Persisted UI preference (e.g. a collapsed card); falls back to memory only. */
+export function usePersistentState<T>(key: string, initial: T): [T, (value: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw === null ? initial : (JSON.parse(raw) as T);
+    } catch {
+      return initial;
+    }
+  });
+  const set = useCallback(
+    (next: T) => {
+      setValue(next);
+      try {
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch {
+        // Storage unavailable: keep the value for this page only.
+      }
+    },
+    [key],
+  );
+  return [value, set];
 }

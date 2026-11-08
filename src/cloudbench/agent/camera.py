@@ -218,14 +218,14 @@ def mock_source(config: CameraConfig, surface: SimulatedSurface) -> Callable[[],
         def read() -> np.ndarray:
             t = time.monotonic() - started
             frame = np.full((h, w, 3), 24, np.uint8)
-            freq = surface.frequency_hz
-            if freq:
+            freq, amplitude = surface.drive()
+            if freq and amplitude > 0:
                 # Faraday waves respond at half the drive frequency; draw a standing
                 # square-ish lattice whose spatial scale shrinks with frequency.
                 k = 2 * math.pi / max(radius / 4, radius * 12 / freq)
                 phase = math.cos(math.pi * freq / 2 * t / 10)
                 height = (np.cos(k * r * np.cos(theta)) + np.cos(k * r * np.sin(theta))) * phase
-                level = 120 + 90 * surface.amplitude * height / 2
+                level = 120 + 90 * amplitude * height / 2
             else:
                 level = np.full_like(r, 120)
             shade = np.clip(level, 0, 255).astype(np.uint8)
@@ -234,7 +234,7 @@ def mock_source(config: CameraConfig, surface: SimulatedSurface) -> Callable[[],
             )
             cv2.circle(frame, (int(cx), int(cy)), int(radius), (200, 200, 200), 2, cv2.LINE_AA)
             label = datetime.now(UTC).strftime("MOCK CAMERA  %H:%M:%S.%f")[:-3]
-            if freq:
+            if freq and amplitude > 0:
                 label += f"  drive {freq:.0f} Hz"
             # Bottom-left, clear of the badges the web app overlays at the top.
             cv2.putText(

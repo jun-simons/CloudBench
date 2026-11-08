@@ -145,13 +145,17 @@ class RunService:
             files = await self._resolve_files(s, principal, action, run_input)
 
             busy = await s.execute(
-                select(Run.id).where(
+                select(Run.id, Run.action).where(
                     Run.workbench_id == workbench_id,
                     Run.tool == tool_name,
                     Run.state.in_([RunState.PENDING, RunState.RUNNING]),
                 )
             )
-            if busy.first() is not None:
+            # Concurrent actions never block and are never blocked by long-running ones.
+            blocking = [
+                row for row in busy if not (a := tool.action(row.action)) or not a.concurrent
+            ]
+            if not action.concurrent and blocking:
                 raise ApiError(409, "tool_busy", f"Tool {tool_name!r} is already running an action")
 
             run = Run(

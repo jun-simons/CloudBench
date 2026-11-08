@@ -1,0 +1,29 @@
+# Test fixture: a timed experiment whose waveform is generated from parameters
+# and played as a clip, covering generated assets and play_waveform.
+apiVersion: cloudbench/v1
+kind: Experiment
+id: exp_tone_clip
+version: 1
+title: Tone clip
+requirements:
+  tools:
+    exciter:
+      type: vibration-exciter
+      actions: [play_waveform]
+parameters:
+  frequency_hz: {type: number, minimum: 10, maximum: 120, default: 40}
+  shape: {type: string, enum: [sine, square, triangle, sawtooth], default: sine}
+  gain: {type: number, minimum: 0, maximum: 1, default: 0.4}
+  duration_s: {type: number, minimum: 0.1, maximum: 10, default: 1}
+assets:
+  drive:
+    generate:
+      kind: tone
+      shape: "{{ params.shape }}"
+      frequency_hz: "{{ params.frequency_hz }}"
+      duration_s: "{{ params.duration_s }}"
+procedure:
+  - run: exciter.play_waveform
+    input:
+      audio: "{{ assets.drive }}"
+      gain: "{{ params.gain }}"

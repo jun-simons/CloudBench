@@ -9,9 +9,11 @@ import logging
 import time
 import wave
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
+
+from cloudbench.agent.synth import ToneSynth
 
 log = logging.getLogger(__name__)
 
@@ -79,6 +81,13 @@ class AudioOutput(Protocol):
         """Play to completion or until ``cancel`` is set. Returns seconds played."""
         ...
 
+    async def play_tone(
+        self, synth: ToneSynth, done: asyncio.Event, max_duration_s: float
+    ) -> float:
+        """Play a live tone until ``done`` is set or ``max_duration_s`` passes, then fade
+        out. Returns seconds played."""
+        ...
+
     def stop(self) -> None:
         """Silence the output immediately. Must be safe to call at any time."""
         ...
@@ -90,6 +99,7 @@ class SoundDeviceOutput:
 
         self._sd = sounddevice
         self._device = device
+        self._tone_stream: Any = None
 
     async def play(self, audio: Audio, cancel: asyncio.Event) -> float:
         started = time.monotonic()
@@ -109,8 +119,42 @@ class SoundDeviceOutput:
             self._sd.stop()
         return min(time.monotonic() - started, audio.duration_s)
 
+    async def play_tone(
+        self, synth: ToneSynth, done: asyncio.Event, max_duration_s: float
+    ) -> float:
+        def callback(outdata: np.ndarray, frames: int, _time: object, _status: object) -> None:
+            outdata[:, 0] = synth.render(frames)
+
+        stream = self._sd.OutputStream(
+            samplerate=synth.sample_rate,
+            channels=1,
+            dtype="float32",
+            device=self._device,
+            callback=callback,
+        )
+        self._tone_stream = stream
+        started = time.monotonic()
+        stream.start()
+        try:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(done.wait(), max_duration_s)
+            synth.release()
+            # Let the fade-out play (a few blocks, at most 0.5 s) before closing the stream.
+            for _ in range(50):
+                if synth.finished:
+                    break
+                await asyncio.sleep(0.01)
+        finally:
+            stream.stop()
+            stream.close()
+            self._tone_stream = None
+        return time.monotonic() - started
+
     def stop(self) -> None:
         self._sd.stop()
+        stream = self._tone_stream
+        if stream is not None:
+            stream.abort()
 
 
 @dataclass
@@ -119,6 +163,16 @@ class SimulatedSurface:
 
     frequency_hz: float | None = None
     amplitude: float = 0.0
+    # While a live tone plays, the camera reads its parameters directly.
+    synth: ToneSynth | None = None
+
+    def drive(self) -> tuple[float | None, float]:
+        """Current drive frequency and amplitude, from a live tone or a clip."""
+        synth = self.synth
+        if synth is not None:
+            params = synth.params
+            return params.frequency_hz, synth.current_amplitude
+        return self.frequency_hz, self.amplitude
 
 
 class MockOutput:
@@ -138,6 +192,26 @@ class MockOutput:
             self.stop()
         return min(time.monotonic() - started, audio.duration_s)
 
+    async def play_tone(
+        self, synth: ToneSynth, done: asyncio.Event, max_duration_s: float
+    ) -> float:
+        started = time.monotonic()
+        self._surface.synth = synth
+        try:
+            # Nothing renders audio here, so advance the synth's smoothing ourselves.
+            while not done.is_set() and time.monotonic() - started < max_duration_s:
+                synth.render(480)
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(done.wait(), 0.01)
+            synth.release()
+            while not synth.finished:
+                synth.render(480)
+                await asyncio.sleep(0.01)
+        finally:
+            self._surface.synth = None
+        return time.monotonic() - started
+
     def stop(self) -> None:
         self._surface.frequency_hz = None
         self._surface.amplitude = 0.0
+        self._surface.synth = None
