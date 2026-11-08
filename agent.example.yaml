@@ -4,8 +4,8 @@
 
 gateway_url: http://localhost:8000
 workbench_id: wb_faraday
-name: "TODO:text - workbench name"
-description: "TODO:text - one-line workbench description"
+name: "Faraday Waves Bench"
+description: "A dish of water on a subwoofer, filmed from above, for making Faraday waves."
 
 vibrator:
   # "sounddevice" plays through an audio output into the exciter's amplifier;

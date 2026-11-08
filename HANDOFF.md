@@ -30,7 +30,7 @@ State at the end of 2026-11-08.
 ## Open items
 
 - [ ] Replace the placeholder preset values in `experiments/faraday-waves/experiment.yaml` (25/40/80 Hz sine, 50 Hz square) with settings that look good on the real dish, and write their labels.
-- [ ] Remaining `TODO:text` copy: app strings in `web/src/copy.ts`, experiment notes and preset names in the experiment file.
+- [x] Remaining `TODO:text` copy: app strings, experiment notes, preset names and the workbench name and description are all written.
 - [ ] Merge PR #2, then make `main` the default branch on GitHub and point the VM at it (`git checkout main` in `~/CloudBench`).
 - [ ] `www.cloudbench.work` still points at Porkbun's parking page; point it at `104.238.131.98` (or CNAME to `cloudbench.work`) and add it to `CLOUDBENCH_DOMAIN` in `deploy/.env` on the VM.
 - [ ] Rotate the VM's sudo password; it was shared in a chat session.
