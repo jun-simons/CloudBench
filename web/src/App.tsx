@@ -32,16 +32,18 @@ function Lab({ name }: { name: string }) {
   const control = useLiveControl(lab, setError);
 
   // The stream to show comes from the experiment's first "show" step, via its role binding.
+  // If the bench does not (yet) match the experiment, e.g. its agent is an older version,
+  // fall back to the bench's first stream: the video is still worth watching.
   const stream = useMemo(() => {
     if (!experiment || !workbench) return null;
     const show = experiment.procedure.find((s) => "show" in s);
     const bindings = experiment.compatible_workbenches.find(
       (c) => c.workbench_id === workbench.id,
     )?.bindings;
-    if (!show || !("show" in show) || !bindings) return null;
-    const [role, streamName] = show.show.split(".");
-    const tool = workbench.tools.find((t) => t.name === (role ? bindings[role] : undefined));
-    const descriptor = tool?.streams.find((s) => s.name === streamName) ?? null;
+    const [role, streamName] = show && "show" in show ? show.show.split(".") : [];
+    const bound = workbench.tools.find((t) => t.name === (role ? bindings?.[role] : undefined));
+    const tool = bound ?? workbench.tools.find((t) => t.streams.length > 0);
+    const descriptor = tool?.streams.find((s) => s.name === streamName) ?? tool?.streams[0] ?? null;
     if (!tool || !descriptor) return null;
     return {
       descriptor,
