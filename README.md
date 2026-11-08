@@ -98,6 +98,7 @@ The important ones:
 | `CLOUDBENCH_AGENT_SECRETS` | JSON map of workbench ID to agent secret |
 | `CLOUDBENCH_SIGNING_SECRET` | Signs short-lived file download links for agents (random per process if unset) |
 | `CLOUDBENCH_ADMIN_TOKEN` | Enables `/admin` endpoints |
+| `CLOUDBENCH_DEMO_RESET_TOKEN` | Hackathon only: serves a page at `/demo-reset/<token>` whose button ends every session and clears every queue; anyone with the URL can use it |
 | `CLOUDBENCH_DATA_DIR` | SQLite database and uploaded files |
 | `CLOUDBENCH_EXPERIMENTS_DIR` | Folder of `*/experiment.yaml` definitions |
 | `CLOUDBENCH_WEB_DIR` | Built web app to serve at `/` |

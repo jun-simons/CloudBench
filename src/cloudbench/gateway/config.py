@@ -29,6 +29,10 @@ class GatewaySettings(BaseSettings):
     agent_secrets: dict[str, str] = Field(default_factory=dict)
     # Bearer token for /admin endpoints. Admin endpoints are disabled when unset.
     admin_token: str | None = None
+    # Hackathon only: serves a page at /demo-reset/<token> with a button that ends every
+    # lease and clears every queue, so presenters can take the bench. Anyone with the URL
+    # can use it, so make it long and random (openssl rand -hex 16). Unset disables it.
+    demo_reset_token: str | None = Field(default=None, min_length=24)
 
     # Leases
     lease_max_duration_s: float = 180

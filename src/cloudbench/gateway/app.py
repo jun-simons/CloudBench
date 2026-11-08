@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from cloudbench import __version__
-from cloudbench.gateway import agents, api, experiments, files, streams, workbenches
+from cloudbench.gateway import agents, api, demo, experiments, files, streams, workbenches
 from cloudbench.gateway.agents import AgentHub
 from cloudbench.gateway.config import GatewaySettings
 from cloudbench.gateway.db import Database
@@ -99,7 +99,7 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
-    for module in (api, workbenches, files, streams, experiments, agents):
+    for module in (api, workbenches, files, streams, experiments, agents, demo):
         app.include_router(module.router)
     # MCP over Streamable HTTP at /mcp, for AI agents.
     app.router.routes.extend(mcp_app.routes)
