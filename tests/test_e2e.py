@@ -448,7 +448,7 @@ async def test_faraday_experiment_runs_end_to_end(lab: Lab) -> None:
     xrun = r.json()
     assert xrun["parameter_values"] == {
         "frequency_hz": 50,
-        "amplitude": 0.3,
+        "amplitude": 0.2,  # the experiment's default
         "shape": "triangle",
         "duration_s": 1,
     }
