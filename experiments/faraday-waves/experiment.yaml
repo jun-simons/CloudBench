@@ -6,66 +6,109 @@
 apiVersion: cloudbench/v1
 kind: Experiment
 id: exp_faraday_waves
-version: 1
+version: 2
 title: "TODO:text - experiment title (Faraday waves)"
-summary: "TODO:text - one-sentence summary shown on the experiment card"
+summary: "TODO:text - one-sentence summary shown under the title"
 audience: [high-school, intro-physics]
-estimated_duration_s: 60
+estimated_duration_s: 120
 
 requirements:
   tools:
     exciter:
       type: vibration-exciter
-      actions: [play_waveform, stop]
+      actions: [play_tone, set_tone, stop]
     observer:
       type: camera
       streams: [video]
 
 # JSON Schema per parameter; the web app renders these as controls.
-# "x-unit" and "x-step" are display hints and are ignored by validation.
+# "x-unit", "x-step" and "x-format" (percent: show 0.3 as 30%) are display hints
+# and are ignored by validation.
 parameters:
   frequency_hz:
     type: number
-    title: "TODO:text - frequency control label"
+    title: Frequency
     description: "TODO:text - what changing the frequency does"
     minimum: 10
     maximum: 120
     default: 40
     x-unit: Hz
-    x-step: 1
-  gain:
+    x-step: 0.5
+  amplitude:
     type: number
-    title: "TODO:text - amplitude control label"
+    title: Amplitude
     description: "TODO:text - what changing the amplitude does"
-    minimum: 0.05
+    minimum: 0
     maximum: 0.8
-    default: 0.4
-    x-step: 0.05
+    default: 0.3
+    x-format: percent
+    x-step: 0.01
+  shape:
+    type: string
+    title: Wave shape
+    enum: [sine, square, triangle, sawtooth]
+    default: sine
   duration_s:
     type: number
-    title: "TODO:text - duration control label"
-    description: "TODO:text - how long the dish is shaken"
-    minimum: 5
-    maximum: 30
-    default: 15
+    title: Duration
+    description: Length of a timed run (API and agents); the live controls run until stopped.
+    minimum: 1
+    maximum: 180
+    default: 30
     x-unit: s
-    x-step: 1
 
-assets:
-  # Generated per run from the chosen parameters and saved to the user's library.
-  drive:
-    generate:
-      kind: sine
-      frequency_hz: "{{ params.frequency_hz }}"
-      duration_s: "{{ params.duration_s }}"
+# The web app's live controls: switching the vibrator on calls `start` with the
+# parameters below, moving a control calls `update`, switching off calls `stop`.
+live:
+  role: exciter
+  parameters: [frequency_hz, amplitude, shape]
+  start: play_tone
+  update: set_tone
+  stop: stop
 
+# Placeholder values: replace with settings found to look good on the real dish.
+presets:
+  gentle:
+    label: "TODO:text - preset name (gentle ripples)"
+    values: {frequency_hz: 25, amplitude: 0.25, shape: sine}
+  squares:
+    label: "TODO:text - preset name (square lattice)"
+    values: {frequency_hz: 40, amplitude: 0.45, shape: sine}
+  fine:
+    label: "TODO:text - preset name (fine lattice)"
+    values: {frequency_hz: 80, amplitude: 0.6, shape: sine}
+  chaos:
+    label: "TODO:text - preset name (chaotic surface)"
+    values: {frequency_hz: 50, amplitude: 0.7, shape: square}
+
+# A timed run, for the API and AI agents: plays the chosen tone for duration_s.
 procedure:
   - show: observer.video
-  - run: exciter.play_waveform
+  - run: exciter.play_tone
     input:
-      audio: "{{ assets.drive }}"
-      gain: "{{ params.gain }}"
+      shape: "{{ params.shape }}"
+      frequency_hz: "{{ params.frequency_hz }}"
+      amplitude: "{{ params.amplitude }}"
+      duration_s: "{{ params.duration_s }}"
 
+# Markdown. A link to preset:<id> renders as a button that applies that preset;
+# the link text is the button label (leave it empty to use the preset's label).
 notes: |
-  TODO:text - student notes in Markdown: background on Faraday waves, what to
-  look for in the video, and questions to answer.
+  ## TODO:text - section heading (what you are looking at)
+
+  TODO:text - one or two paragraphs: the dish, the vibrator underneath it, and what
+  Faraday waves are.
+
+  ## TODO:text - section heading (try these settings)
+
+  TODO:text - short intro to the presets.
+
+  - [](preset:gentle) TODO:text - what to look for with this preset
+  - [](preset:squares) TODO:text - what to look for with this preset
+  - [](preset:fine) TODO:text - what to look for with this preset
+  - [](preset:chaos) TODO:text - what to look for with this preset
+
+  ## TODO:text - section heading (things to explore)
+
+  TODO:text - questions for students, e.g. how the pattern spacing changes with
+  frequency, and the amplitude at which waves first appear.

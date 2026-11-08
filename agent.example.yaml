@@ -13,8 +13,11 @@ vibrator:
   driver: mock
   # Output device name or index from `python -m sounddevice`; omit for the default.
   # device: "USB Audio"
-  max_duration_s: 60
+  # Hard limits enforced on the laptop, whatever the gateway or UI asks for.
+  max_duration_s: 180
   max_gain: 1.0
+  min_frequency_hz: 1
+  max_frequency_hz: 2000
 
 camera:
   # "opencv" reads any camera the OS exposes (USB webcam, an iPhone via Continuity

@@ -43,6 +43,9 @@ class ActionDescriptor(_Model):
     output_schema: dict[str, Any] | None = None
     limits: dict[str, Any] = Field(default_factory=dict)
     safety: dict[str, Any] = Field(default_factory=dict)
+    # True for quick control actions (e.g. adjust or stop a running tone) that may be
+    # invoked while another run on the same tool is in progress.
+    concurrent: bool = False
 
 
 class StreamKind(StrEnum):

@@ -1,4 +1,4 @@
-"""Server-side waveform generation, so clients can pick a frequency instead of uploading audio."""
+"""Server-side WAV generation, so clients can pick a tone instead of uploading audio."""
 
 from __future__ import annotations
 
@@ -9,24 +9,27 @@ from typing import Annotated, Literal
 import numpy as np
 from pydantic import BaseModel, Field
 
+from cloudbench.signals import Shape, waveform
+
 SAMPLE_RATE_HZ = 48_000
 # Headroom below full scale so DAC/amplifier never clips.
 PEAK = 0.9
 FADE_S = 0.05
 
 
-class SineSpec(BaseModel):
-    kind: Literal["sine"] = "sine"
+class ToneSpec(BaseModel):
+    kind: Literal["tone"] = "tone"
+    shape: Shape = Shape.SINE
     frequency_hz: Annotated[float, Field(gt=0, le=20_000)]
     duration_s: Annotated[float, Field(gt=0, le=600)]
     amplitude: Annotated[float, Field(ge=0, le=1)] = 1.0
 
 
-def sine_wav(spec: SineSpec, sample_rate: int = SAMPLE_RATE_HZ) -> bytes:
-    """A mono 16-bit PCM sine wave with short fades to avoid clicks."""
+def tone_wav(spec: ToneSpec, sample_rate: int = SAMPLE_RATE_HZ) -> bytes:
+    """A mono 16-bit PCM tone with short fades to avoid clicks."""
     n = round(spec.duration_s * sample_rate)
-    t = np.arange(n, dtype=np.float64) / sample_rate
-    signal = np.sin(2 * np.pi * spec.frequency_hz * t) * (PEAK * spec.amplitude)
+    phase = np.arange(n, dtype=np.float64) * (spec.frequency_hz / sample_rate)
+    signal = waveform(spec.shape, phase) * (PEAK * spec.amplitude)
 
     fade = min(round(FADE_S * sample_rate), n // 2)
     if fade > 0:
