@@ -505,6 +505,13 @@ button:focus-visible {
   gap: 6px;
 }
 
+.field-description {
+  margin-top: -2px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 .field-header {
   display: flex;
   align-items: center;

@@ -95,8 +95,11 @@ class VibratorTool(Tool):
         self.descriptor = ToolDescriptor(
             name="vibrator",
             type="vibration-exciter",
-            title="TODO:text - vibrator title",
-            description="TODO:text - what the vibrator is and what it shakes",
+            title="Vibrator",
+            description=(
+                "The speaker underneath the dish. Plays low frequency sounds to physically "
+                "shake the dish up and down."
+            ),
             actions=[
                 ActionDescriptor(
                     name="play_tone",
@@ -349,8 +352,8 @@ class CameraTool(Tool):
         self.descriptor = ToolDescriptor(
             name="camera",
             type="camera",
-            title="TODO:text - camera title",
-            description="TODO:text - what the camera looks at",
+            title="Camera",
+            description="View the live camera stream of the faraday dish.",
             streams=[
                 StreamDescriptor(
                     name="video",

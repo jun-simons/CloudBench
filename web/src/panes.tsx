@@ -268,6 +268,7 @@ function NumberControl({
         style={{ "--fill": `${percentFill}%` } as CSSProperties}
         onChange={(e) => onChange(Number(e.target.value))}
       />
+      {schema.description && <p className="field-description">{schema.description}</p>}
     </div>
   );
 }
@@ -326,6 +327,7 @@ export function VibratorCard({
                 }))}
                 onChange={(v) => setValue(name, v)}
               />
+              {schema.description && <p className="field-description">{schema.description}</p>}
             </div>
           );
         }
