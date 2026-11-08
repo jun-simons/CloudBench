@@ -869,6 +869,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* Presets side by side as picture buttons, with the chosen one's note underneath. */
 .preset-gallery {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -877,7 +878,15 @@ input[type="range"]::-moz-range-thumb {
 
 .preset-tiles {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  grid-template-columns: repeat(var(--columns, 4), minmax(0, 1fr));
+}
+
+/* Too narrow for four labels side by side (small phones): two per row. */
+@container (max-width: 300px) {
+  .preset-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 button.preset-tile {
@@ -888,7 +897,7 @@ button.preset-tile {
   gap: 6px;
   min-width: 0;
   min-height: 0;
-  padding: 10px 4px 8px;
+  padding: 10px 2px 8px;
   border-color: var(--border);
   background: var(--surface-2);
   color: var(--muted);
@@ -923,10 +932,13 @@ button.preset-tile.selected {
 
 .preset-tile-label {
   max-width: 100%;
-  font-size: 0.8125rem;
+  font-size: 0.71875rem;
+  letter-spacing: -0.01em;
   font-weight: 600;
   text-align: center;
-  overflow-wrap: anywhere;
+  /* Whole words where they fit; hyphenate only a word wider than the tile. */
+  hyphens: auto;
+  overflow-wrap: break-word;
 }
 
 .preset-note {

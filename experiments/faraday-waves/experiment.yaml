@@ -66,25 +66,25 @@ live:
   update: set_tone
   stop: stop
 
-# Placeholder values: replace with settings found to look good on the real dish.
-# `icon` picks the picture drawn on the preset's button (see PresetIcon in the web app).
+# Settings found on the real dish. `icon` picks the picture drawn on the preset's button
+# (see PresetIcon in the web app).
 presets:
-  gentle:
-    label: "Gentle waves"
-    icon: ripples
-    values: {frequency_hz: 25, amplitude: 0.08, shape: sine}
-  squares:
-    label: "Square lattice"
-    icon: square-lattice
-    values: {frequency_hz: 40, amplitude: 0.14, shape: sine}
-  fine:
-    label: "Fine lattice"
-    icon: fine-lattice
-    values: {frequency_hz: 80, amplitude: 0.19, shape: sine}
-  chaos:
-    label: "Chaotic waves"
-    icon: chaos
-    values: {frequency_hz: 50, amplitude: 0.22, shape: square}
+  rosette:
+    label: "Rosette (ten petals)"
+    icon: rosette
+    values: {frequency_hz: 40, amplitude: 0.04, shape: square}
+  cells:
+    label: "Honeycomb cells"
+    icon: hex-cells
+    values: {frequency_hz: 110, amplitude: 0.12, shape: sine}
+  rings:
+    label: "Concentric rings"
+    icon: rings
+    values: {frequency_hz: 100, amplitude: 0.12, shape: triangle}
+  ridges:
+    label: "Broad ridges"
+    icon: ridges
+    values: {frequency_hz: 30, amplitude: 0.05, shape: triangle}
 
 # A timed run, for the API and AI agents: plays the chosen tone for duration_s.
 procedure:
@@ -109,10 +109,10 @@ notes: |
 
   Not sure where to start? Try one of the presets below to explore different behaviors of the water. Each preset configures the workbench to produce a different wave pattern. Watch the live camera feed as the experiment settles, and see how changing the vibration parameters transforms the surface.
 
-  - [](preset:gentle) Start with subtle vibrations. Look closely for patterns as the water transitions from a relatively flat surface into an organized wave pattern.
-  - [](preset:squares) Look for a regular, grid-like arrangement of peaks and troughs. Notice how the waves organize themselves into a repeating square pattern.
-  - [](preset:fine) Observe smaller, more closely spaced wave patterns. Pay attention to how the scale of the patterns differs from the other presets.
-  - [](preset:chaos) Explore a less orderly regime. Look for irregular patterns and competing wave structures.
+  - [](preset:rosette) A square wave at 40 Hz, very gently: a symmetric ten-petal flower around the centre. Forms within a few seconds.
+  - [](preset:cells) A fine lattice of small cells with local hexagonal order.
+  - [](preset:rings) Starts as cells, then relaxes into concentric rings after about 10 s.
+  - [](preset:ridges) Slow, wide ridges and swells at low frequency. A few small droplets may jump; keep the amplitude low.
 
   ## Questions to Explore
 

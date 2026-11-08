@@ -433,7 +433,7 @@ async def test_faraday_experiment_runs_end_to_end(lab: Lab) -> None:
         {"workbench_id": WORKBENCH, "bindings": {"exciter": "vibrator", "observer": "camera"}}
     ]
     assert exp["live"]["start"] == "play_tone"
-    assert set(exp["presets"]) >= {"gentle", "chaos"}
+    assert set(exp["presets"]) >= {"rosette", "cells", "rings", "ridges"}
 
     alice = await lab.guest()
     a = await lease(alice)
