@@ -226,6 +226,7 @@ export function CameraCard({
       id={!source || source.primary ? "camera" : `stream-${source.key}`}
       title={source && !source.primary ? source.title : copy.camera.title}
       badge={<LiveBadge online={online} />}
+      defaultOpen={!source || source.primary}
     >
       <StreamView source={source} workbench={workbench} />
     </CollapsibleCard>

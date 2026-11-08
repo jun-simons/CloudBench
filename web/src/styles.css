@@ -1111,7 +1111,15 @@ button.preset-tile.selected {
   color: var(--text);
 }
 
+.panel-header h2 {
+  flex: none;
+}
+
+/* Gives way first when a pane is narrow. */
 .panel-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   margin-left: auto;
   font-family: var(--mono);
   font-size: 0.71875rem;

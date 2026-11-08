@@ -154,10 +154,12 @@ function Lab({ name }: { name: string }) {
         <div className="pane pane-controls">
           {leasePanel}
           <CameraCard source={primary} workbench={workbench} />
+          {vibrator}
+          {/* Extra outputs (e.g. computer vision overlays) come after the controls, collapsed,
+              so the camera and vibrator stay together on a phone. */}
           {others.map((source) => (
             <CameraCard key={source.key} source={source} workbench={workbench} />
           ))}
-          {vibrator}
         </div>
 
         <div className="pane pane-guide">{guide}</div>

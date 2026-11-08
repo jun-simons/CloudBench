@@ -41,8 +41,9 @@ export function CollapsibleCard({
         {badge}
         {actions && <div className="card-actions">{actions}</div>}
       </header>
+      {/* Closed cards do not render their body, so a collapsed stream stops downloading. */}
       <div id={bodyId} className="card-body" hidden={!open}>
-        {children}
+        {open && children}
       </div>
     </section>
   );
