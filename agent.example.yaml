@@ -14,6 +14,9 @@ vibrator:
   # Output device name or index from `python -m sounddevice`; omit for the default.
   # device: "USB Audio"
   # Hard limits enforced on the laptop, whatever the gateway or UI asks for.
+  # A live tone runs until the user presses Stop, their lease ends, or max_duration_s
+  # passes; keep it at least the gateway's lease length (CLOUDBENCH_LEASE_MAX_DURATION_S)
+  # or tones stop early. The gateway logs a warning when it is shorter.
   max_duration_s: 180
   max_gain: 1.0
   min_frequency_hz: 1

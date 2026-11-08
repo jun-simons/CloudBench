@@ -64,6 +64,32 @@ async def test_workbench_registers_with_tools(lab: Lab) -> None:
     assert r.json()["type"] == "vibration-exciter"
 
 
+def _short_limit_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [r.getMessage() for r in caplog.records if "shorter than the" in r.getMessage()]
+
+
+# The test agent caps tones at 20 s.
+@pytest.mark.parametrize("gateway_overrides", [{"lease_max_duration_s": 60}])
+async def test_gateway_warns_when_agent_stops_tones_before_lease_ends(
+    caplog: pytest.LogCaptureFixture, lab: Lab
+) -> None:
+    caplog.set_level("WARNING", logger="cloudbench.gateway.agents")
+    await lab.stop_agent()
+    await lab.start_agent()
+    warnings = _short_limit_warnings(caplog)
+    assert any("vibrator.play_tone after 20 s, shorter than the 60 s lease" in w for w in warnings)
+
+
+@pytest.mark.parametrize("gateway_overrides", [{"lease_max_duration_s": 20}])
+async def test_no_warning_when_agent_limits_cover_the_lease(
+    caplog: pytest.LogCaptureFixture, lab: Lab
+) -> None:
+    caplog.set_level("WARNING", logger="cloudbench.gateway.agents")
+    await lab.stop_agent()
+    await lab.start_agent()
+    assert _short_limit_warnings(caplog) == []
+
+
 async def test_agent_with_wrong_secret_is_rejected(lab: Lab) -> None:
     ws_url = lab.url.replace("http://", "ws://") + AGENT_CONTROL_PATH
     with pytest.raises((InvalidStatus, ConnectionClosed)):

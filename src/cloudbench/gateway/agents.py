@@ -151,6 +151,7 @@ class AgentHub:
         await self._save_descriptor(hello.workbench)
         await conn.send(Welcome(heartbeat_interval_s=self.s.settings.agent_heartbeat_interval_s))
         log.info("Agent %s online (agent %s)", workbench_id, hello.agent_version)
+        self._warn_about_short_limits(hello.workbench)
         await self.s.leases.on_agent_connected(workbench_id)
         await self.publish_workbench(workbench_id)
 
@@ -209,6 +210,27 @@ class AgentHub:
             await _close_quietly(conn.websocket, 1001, "gateway shutting down")
 
     # ---------------------------------------------------------------- helpers
+
+    def _warn_about_short_limits(self, descriptor: WorkbenchDescriptor) -> None:
+        """Warn when an agent stops actions before a lease would end.
+
+        Users expect a live tone to run until they stop it or their lease ends; an agent
+        whose ``max_duration_s`` is shorter cuts it off early with no visible reason.
+        """
+        lease_s = self.s.settings.lease_max_duration_s
+        for tool in descriptor.tools:
+            for action in tool.actions:
+                cap = action.limits.get("max_duration_s")
+                if isinstance(cap, int | float) and cap < lease_s:
+                    log.warning(
+                        "Agent %s stops %s.%s after %g s, shorter than the %g s lease; "
+                        "raise vibrator.max_duration_s in the agent config",
+                        descriptor.id,
+                        tool.name,
+                        action.name,
+                        cap,
+                        lease_s,
+                    )
 
     async def _save_descriptor(self, descriptor: WorkbenchDescriptor) -> None:
         async with self.s.db.session() as s:
