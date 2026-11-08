@@ -1,0 +1,27 @@
+# Workbench agent config. Copy to agent.local.yaml (git-ignored) and edit.
+# The secret comes from the CLOUDBENCH_AGENT_SECRET environment variable and must
+# match this workbench's entry in the gateway's CLOUDBENCH_AGENT_SECRETS.
+
+gateway_url: http://localhost:8000
+workbench_id: wb_faraday
+name: "TODO:text - workbench name"
+description: "TODO:text - one-line workbench description"
+
+vibrator:
+  # "sounddevice" plays through an audio output into the exciter's amplifier;
+  # "mock" simulates playback for development without hardware.
+  driver: mock
+  # Output device name or index from `python -m sounddevice`; omit for the default.
+  # device: "USB Audio"
+  max_duration_s: 60
+  max_gain: 1.0
+
+camera:
+  # "opencv" reads any camera the OS exposes (USB webcam, an iPhone via Continuity
+  # Camera on macOS, a capture card); "mock" draws a simulated petri dish.
+  driver: mock
+  device: 0
+  width: 1280
+  height: 720
+  fps: 30
+  jpeg_quality: 80

@@ -1,0 +1,6 @@
+{$CLOUDBENCH_DOMAIN} {
+	reverse_proxy gateway:8000 {
+		# Pass SSE and MJPEG responses through immediately instead of buffering.
+		flush_interval -1
+	}
+}

@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+import argparse
+import asyncio
+import contextlib
+import logging
+import os
+import sys
+from pathlib import Path
+
+from cloudbench.agent.audio import AudioOutput, MockOutput, SimulatedSurface, SoundDeviceOutput
+from cloudbench.agent.camera import Camera, mock_source, opencv_source
+from cloudbench.agent.config import AgentConfig
+from cloudbench.agent.runtime import Agent
+from cloudbench.agent.tools import CameraTool, VibratorTool
+from cloudbench.protocol import WorkbenchDescriptor
+
+
+def build_agent(config: AgentConfig, secret: str) -> Agent:
+    surface = SimulatedSurface()
+    output: AudioOutput = (
+        SoundDeviceOutput(config.vibrator.device)
+        if config.vibrator.driver == "sounddevice"
+        else MockOutput(surface)
+    )
+    source = (
+        opencv_source(config.camera)
+        if config.camera.driver == "opencv"
+        else mock_source(config.camera, surface)
+    )
+    camera = Camera(config.camera, source)
+    vibrator = VibratorTool(config.vibrator, output)
+    camera_tool = CameraTool(config.camera, camera)
+    workbench = WorkbenchDescriptor(
+        id=config.workbench_id,
+        name=config.name,
+        description=config.description,
+        tools=[vibrator.descriptor, camera_tool.descriptor],
+    )
+    return Agent(
+        config.gateway_url,
+        workbench,
+        secret,
+        tools=[vibrator, camera_tool],
+        cameras={("camera", "video"): camera},
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="CloudBench workbench agent")
+    parser.add_argument("--config", type=Path, help="agent YAML config (see agent.example.yaml)")
+    args = parser.parse_args()
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
+
+    config = AgentConfig.load(args.config)
+    secret = os.environ.get("CLOUDBENCH_AGENT_SECRET") or config.secret
+    if not secret:
+        sys.exit("Set CLOUDBENCH_AGENT_SECRET (or `secret` in the config file)")
+    agent = build_agent(config, secret)
+    with contextlib.suppress(KeyboardInterrupt):
+        asyncio.run(agent.run())
+
+
+if __name__ == "__main__":
+    main()
