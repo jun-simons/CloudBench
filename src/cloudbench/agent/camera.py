@@ -151,7 +151,10 @@ def mock_source(config: CameraConfig, surface: SimulatedSurface) -> Callable[[],
             label = datetime.now(UTC).strftime("MOCK CAMERA  %H:%M:%S.%f")[:-3]
             if freq:
                 label += f"  drive {freq:.0f} Hz"
-            cv2.putText(frame, label, (16, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (230, 230, 230), 1)
+            # Bottom-left, clear of the badges the web app overlays at the top.
+            cv2.putText(
+                frame, label, (12, h - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (230, 230, 230), 1
+            )
             return frame
 
         return read

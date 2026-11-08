@@ -109,6 +109,16 @@ class LeaseManager:
             end_reason=lease.end_reason,
         )
 
+    async def list_for(
+        self, principal: Principal, open_only: bool = True, limit: int = 50
+    ) -> list[LeaseOut]:
+        async with self.s.db.session() as s:
+            query = select(Lease).where(Lease.principal_id == principal.id)
+            if open_only:
+                query = query.where(Lease.state.in_(OPEN_LEASE_STATES))
+            result = await s.execute(query.order_by(Lease.created_at.desc()).limit(limit))
+            return [await self.to_out(s, lease) for lease in result.scalars()]
+
     async def active_lease(self, session: AsyncSession, workbench_id: str) -> Lease | None:
         result = await session.execute(
             select(Lease).where(

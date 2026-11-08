@@ -99,6 +99,14 @@ async def request_lease(
     return lease
 
 
+@router.get("/v1/me/leases", tags=["library"])
+async def list_my_leases(
+    principal: CurrentPrincipal, services: ServicesDep, open: bool = True
+) -> list[LeaseOut]:
+    """Your leases, newest first. By default only open ones (queued, offered, active)."""
+    return await services.leases.list_for(principal, open_only=open)
+
+
 @router.get("/v1/leases/{lease_id}", tags=["leases"])
 async def get_lease(lease_id: str, principal: CurrentPrincipal, services: ServicesDep) -> LeaseOut:
     async with services.db.session() as s:

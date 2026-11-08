@@ -53,6 +53,7 @@ async def test_workbench_registers_with_tools(lab: Lab) -> None:
     [bench] = r.json()
     assert bench["id"] == WORKBENCH
     assert bench["status"] == "online"
+    assert bench["available"] is True
     tools = {t["name"]: t for t in bench["tools"]}
     assert set(tools) == {"vibrator", "camera"}
     actions = {a["name"] for a in tools["vibrator"]["actions"]}
@@ -93,6 +94,7 @@ async def test_lease_queue_offer_and_accept(lab: Lab) -> None:
     b = await lease(bob)
     assert b["state"] == "queued"
     assert b["queue_position"] == 1
+    assert [x["id"] for x in (await bob.get("/v1/me/leases")).json()] == [b["id"]]
 
     # Requesting again returns the same lease instead of queueing twice.
     again = await bob.post(f"/v1/workbenches/{WORKBENCH}/leases")
@@ -110,6 +112,10 @@ async def test_lease_queue_offer_and_accept(lab: Lab) -> None:
         return (await bob.get(f"/v1/leases/{b['id']}")).json()["state"] == "offered"
 
     await eventually(offered)
+    # An offer is not use: nobody holds the bench until Bob accepts, but it is not free.
+    bench = (await lab.client.get(f"/v1/workbenches/{WORKBENCH}")).json()
+    assert bench["current_holder"] is None
+    assert bench["available"] is False
 
     r = await bob.post(f"/v1/leases/{b['id']}/accept")
     assert r.json()["state"] == "active"
@@ -453,3 +459,41 @@ async def test_cancelling_experiment_stops_the_vibrator(lab: Lab) -> None:
     [run] = r.json()["runs"]
     done = await eventually(lambda: run_finished(alice, run["id"]))
     assert done["state"] == "cancelled"
+
+
+async def test_experiment_progress_is_pushed_over_events(lab: Lab) -> None:
+    alice = await lab.guest()
+    token = alice.headers["Authorization"].split()[1]
+    events: list[dict[str, Any]] = []
+
+    async def listen() -> None:
+        async with lab.client.stream("GET", f"/v1/events?access_token={token}") as response:
+            event_type = None
+            async for line in response.aiter_lines():
+                if line.startswith("event: "):
+                    event_type = line[7:]
+                elif line.startswith("data: ") and event_type == "experiment_run.updated":
+                    events.append(json.loads(line[6:]))
+
+    listener = asyncio.create_task(listen())
+    try:
+        await asyncio.sleep(0.2)
+        a = await lease(alice)
+        xrun = (
+            await alice.post(
+                "/v1/experiments/exp_faraday_waves/runs",
+                json={"lease_id": a["id"], "parameters": {"duration_s": 10}},
+            )
+        ).json()
+
+        # The UI draws a progress bar from the running step's started_at.
+        async def step_started() -> bool:
+            return any(
+                e["id"] == xrun["id"] and e["runs"] and e["runs"][0]["started_at"] for e in events
+            )
+
+        await eventually(step_started)
+        await alice.post(f"/v1/experiment-runs/{xrun['id']}/cancel")
+    finally:
+        listener.cancel()
+        await asyncio.gather(listener, return_exceptions=True)

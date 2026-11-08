@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cloudbench.gateway.db import Principal, Workbench, WorkbenchStatus
+from cloudbench.gateway.db import LeaseState, Principal, Workbench, WorkbenchStatus
 from cloudbench.gateway.errors import not_found
 from cloudbench.gateway.services import Services, get_services
 from cloudbench.protocol import ToolDescriptor, ToolStatus, WorkbenchDescriptor
@@ -26,7 +26,9 @@ class WorkbenchOut(BaseModel):
     # True while the bench is being reset to a safe state between leases.
     resetting: bool
     queue_length: int
-    # Display name of whoever holds (or has been offered) the bench right now.
+    # True when a new lease request would be granted immediately.
+    available: bool
+    # Display name of whoever is using the bench right now (active lease only).
     current_holder: str | None
     last_seen_at: datetime | None
     tools: list[ToolOut]
@@ -45,14 +47,24 @@ async def workbench_summary(services: Services, s: AsyncSession, row: Workbench)
     conn = services.agents.connection(row.id)
     tool_status = conn.tool_status if conn else {}
     active = await services.leases.active_lease(s, row.id)
-    holder = await s.get(Principal, active.principal_id) if active else None
+    queue_length = await services.leases.queue_length(s, row.id)
+    status = workbench_status(services, row)
+    holder = None
+    if active is not None and active.state == LeaseState.ACTIVE:
+        holder = await s.get(Principal, active.principal_id)
     return WorkbenchOut(
         id=row.id,
         name=row.name,
         description=descriptor.description,
-        status=workbench_status(services, row),
+        status=status,
         resetting=services.leases.is_resetting(row.id),
-        queue_length=await services.leases.queue_length(s, row.id),
+        queue_length=queue_length,
+        available=(
+            status == WorkbenchStatus.ONLINE
+            and active is None
+            and queue_length == 0
+            and not services.leases.is_resetting(row.id)
+        ),
         current_holder=holder.display_name if holder else None,
         last_seen_at=row.last_seen_at,
         tools=[ToolOut(**t.model_dump(), status=tool_status.get(t.name)) for t in descriptor.tools],

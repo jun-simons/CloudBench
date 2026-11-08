@@ -225,6 +225,7 @@ class ExperimentService:
         self._asset_files: dict[str, dict[str, str]] = {}
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._task_lease: dict[str, str] = {}
+        self._background: set[asyncio.Task[None]] = set()
         self._services: Services | None = None
 
     def bind(self, services: Services) -> None:
@@ -459,6 +460,16 @@ class ExperimentService:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
         return await self.get(principal, xrun_id)
+
+    def on_step_updated(self, xrun_id: str, principal_id: str) -> None:
+        """A step's Run changed state; push the experiment run so clients see progress."""
+
+        async def publish() -> None:
+            self._publish(principal_id, await self.get_out(xrun_id))
+
+        task = asyncio.create_task(publish())
+        self._background.add(task)
+        task.add_done_callback(self._background.discard)
 
     async def on_lease_ended(self, lease_id: str) -> None:
         """Called by the lease manager; the agent resets the tools, we stop the procedure."""

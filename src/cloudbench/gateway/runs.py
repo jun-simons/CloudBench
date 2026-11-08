@@ -320,3 +320,5 @@ class RunService:
 
     def _publish(self, run: Run) -> None:
         self.s.bus.publish("run.updated", run_out(run).model_dump(mode="json"), to=run.principal_id)
+        if run.experiment_run_id is not None:
+            self.s.experiments.on_step_updated(run.experiment_run_id, run.principal_id)
