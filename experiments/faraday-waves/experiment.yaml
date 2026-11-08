@@ -39,8 +39,8 @@ parameters:
     title: Amplitude
     description: "Amplitude, or volume, of the speaker. A larger amplitude results in taller waves."
     minimum: 0
-    maximum: 0.8
-    default: 0.3
+    maximum: 0.25
+    default: 0.2
     x-format: percent
     x-step: 0.01
   shape:
@@ -72,19 +72,19 @@ presets:
   gentle:
     label: "Gentle waves"
     icon: ripples
-    values: {frequency_hz: 25, amplitude: 0.25, shape: sine}
+    values: {frequency_hz: 25, amplitude: 0.08, shape: sine}
   squares:
     label: "Square lattice"
     icon: square-lattice
-    values: {frequency_hz: 40, amplitude: 0.45, shape: sine}
+    values: {frequency_hz: 40, amplitude: 0.14, shape: sine}
   fine:
     label: "Fine lattice"
     icon: fine-lattice
-    values: {frequency_hz: 80, amplitude: 0.6, shape: sine}
+    values: {frequency_hz: 80, amplitude: 0.19, shape: sine}
   chaos:
     label: "Chaotic waves"
     icon: chaos
-    values: {frequency_hz: 50, amplitude: 0.7, shape: square}
+    values: {frequency_hz: 50, amplitude: 0.22, shape: square}
 
 # A timed run, for the API and AI agents: plays the chosen tone for duration_s.
 procedure:
