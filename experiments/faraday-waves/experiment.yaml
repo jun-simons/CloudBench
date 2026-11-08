@@ -7,8 +7,8 @@ apiVersion: cloudbench/v1
 kind: Experiment
 id: exp_faraday_waves
 version: 1
-title: "TODO:text - experiment title (Faraday waves)"
-summary: "TODO:text - one-sentence summary shown on the experiment card"
+title: "Faraday Waves Experiment"
+summary: "Create standing Faraday waves and observe different lattice patterns."
 audience: [high-school, intro-physics]
 estimated_duration_s: 60
 
@@ -26,8 +26,8 @@ requirements:
 parameters:
   frequency_hz:
     type: number
-    title: "TODO:text - frequency control label"
-    description: "TODO:text - what changing the frequency does"
+    title: "Frequency"
+    description: "Frequency of the speaker. The resulting wave frequency should be half this."
     minimum: 10
     maximum: 120
     default: 40
@@ -35,17 +35,17 @@ parameters:
     x-step: 1
   gain:
     type: number
-    title: "TODO:text - amplitude control label"
-    description: "TODO:text - what changing the amplitude does"
+    title: "Amplitude"
+    description: "Amplitude, or volume, of the speaker. A larger amplitude results in taller waves."
     minimum: 0.05
     maximum: 0.8
     default: 0.4
     x-step: 0.05
   duration_s:
     type: number
-    title: "TODO:text - duration control label"
-    description: "TODO:text - how long the dish is shaken"
-    minimum: 5
+    title: "Duration"
+    description: "How long to vibrate for."
+    minimum: 1
     maximum: 30
     default: 15
     x-unit: s
